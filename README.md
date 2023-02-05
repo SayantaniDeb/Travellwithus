@@ -1,6 +1,6 @@
-# Pockify  
+# Travellwithus
 
-Your Pocket Friendly Travel kit.
+Your Pocket Friendly Travel kit. 
 
 ### You can find the app:
 
