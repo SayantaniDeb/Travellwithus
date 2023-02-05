@@ -40,7 +40,7 @@ export default function Navbar() {
                 <div className="flex flex-shrink-0 items-center">
                   
                     <UilNotes/>
-                    <span className='font-bold font-serif text-2xl'>Travellwithus</span>
+                    <span className='font-bold font-serif text-2xl'>Travellwith</span>
                 </div>
                 <div className="hidden sm:ml-6 sm:block">
                   <div className="flex space-x-4">

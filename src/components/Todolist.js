@@ -60,7 +60,7 @@ function Todolist() {
     const [todos,setToDo] = useState([]);
 
   const removeToDo = (id) => {
-    console.log(id);
+    
     const newTodos = todos.filter(
        (d,index) => {
           if(index !== id){
