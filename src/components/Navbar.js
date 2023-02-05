@@ -37,10 +37,10 @@ export default function Navbar() {
                 </Disclosure.Button>
               </div>
               <div className="flex flex-1 items-center justify-center sm:items-stretch sm:justify-start">
-                <div className="flex flex-shrink-0 items-center sm:ml-20">
+                <div className="flex flex-shrink-0 items-center">
                   
                     <UilNotes/>
-                    <span className='font-bold font-serif text-2xl'>Pockify</span>
+                    <span className='font-bold font-serif text-2xl'>Travellwithus</span>
                 </div>
                 <div className="hidden sm:ml-6 sm:block">
                   <div className="flex space-x-4">
