@@ -1,70 +1,64 @@
-# Getting Started with Create React App
+# Pockify  
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
-## Available Scripts
 
-In the project directory, you can run:
+### You can find the app:
 
-### `npm start`
+##### [Hosted here]()
+##### [Video Demo]()
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## 💡Motivation 
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
 
-### `npm test`
+## 📲What it does?
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
 
-### `npm run build`
+## 🎛️ Resources used
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- [Tailwind CSS]() -  A utility-first CSS framework for building fast and responsive web designs.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- [Material-Tailwind CSS]() - A design system that combines the principles of Material Design with the benefits of Tailwind CSS.
 
-### `npm run eject`
+- [Visual Studio Code]() - A cross-platform source-code editor developed by Microsoft for software development and other technical tasks.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+- [React JS]() - a JavaScript library for building user interfaces, developed and maintained by Facebook.
+- [Lottie Files]() - Lottie Files is a library for adding animations to apps and websites, allowing designers to work with motion graphics without the need for coding skills.
+- [Unicons]() -  a library of scalable vector icons, designed to be easily customizable and optimized for use in various design projects.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## 🛠️How I built it? 
+Using React JS and Tailwind CSS.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 💻 App Showcase
+| Desktop-UI | Phone-UI |
+|----------|----------|
+| ![Desktop-UI-demonstration]() | ![Phone-UI-demonstration-video]() |
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## How to get started
 
-## Learn More
+~~~bash
+git clone https://github.com/SayantaniDeb/hack-hack
+~~~
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Running the App locally
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+~~~bash
+npm start
+~~~
 
-### Code Splitting
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## 🧠Challenges faced 
 
-### Analyzing the Bundle Size
+- I was not able to form a team at the end moment, and hence trying to complete the project was a huge task.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## 🥇Accomplishments I am proud of
+- This was my first time working on a MLH Hackathon ✨I DID IT✨
+- Got to learn a lot and a overall nice experience!
+- Completed despite exams knocking at the door!
 
-### Making a Progressive Web App
+## 🚀Future Scope
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
 
-### Advanced Configuration
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
 
-### Deployment
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
