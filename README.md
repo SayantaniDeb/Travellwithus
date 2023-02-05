@@ -1,6 +1,6 @@
 # Pockify  
 
-
+Your Pocket Friendly Travel kit.
 
 ### You can find the app:
 
@@ -8,10 +8,14 @@
 ##### [Video Demo]()
 
 ## 💡Motivation 
-
+All in a one app.
 
 ## 📲What it does?
-
+- suggest route based on>less traffic, places to visit,amenties included.(UNDER CONSTRUCTION)
+- Search for nearby automobiles to share or book.
+- suggest cost friendly home rentals for night stay.
+- A todo planner included to execute all of the above effieciently
+- Search for the destination name and give the weather of the place instantly.(UNDER CONSTRUCTION)
 
 ## 🎛️ Resources used
 
@@ -32,7 +36,7 @@ Using React JS and Tailwind CSS.
 ## 💻 App Showcase
 | Desktop-UI | Phone-UI |
 |----------|----------|
-| ![Desktop-UI-demonstration]() | ![Phone-UI-demonstration-video]() |
+| ![Desktop-UI-demonstration](https://user-images.githubusercontent.com/74983536/216807229-0cd28563-78d2-423b-bd2a-331222ff94da.gif) | ![Phone-UI-demonstration-video](https://user-images.githubusercontent.com/74983536/216807841-a21b7b0b-1d41-484f-bf45-376553c401bc.gif) |
 
 ## How to get started
 
@@ -57,7 +61,9 @@ npm start
 - Completed despite exams knocking at the door!
 
 ## 🚀Future Scope
-
+- To include all the under construction features, fetch the data of nearby automobiles and homestays from a api.
+- Include a user login page and user profile.
+- Make the notification button functional to alert about nearby automobiles all the time.
 
 
 
