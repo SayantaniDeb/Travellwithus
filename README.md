@@ -41,7 +41,7 @@ Using React JS and Tailwind CSS.
 ## How to get started
 
 ~~~bash
-git clone https://github.com/SayantaniDeb/hack-hack
+git clone https://github.com/SayantaniDeb/Travellwithus
 ~~~
 
 ## Running the App locally
