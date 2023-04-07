@@ -4,7 +4,7 @@ Your Pocket Friendly Travel kit.
 
 ### You can find the app:
 
-##### [Hosted here](https://travellwith.netlify.app)
+##### [Hosted here](https://travellwith02.netlify.app)
 ##### [Video Demo](https://user-images.githubusercontent.com/74983536/230199942-84b3ea7b-6110-4620-a009-d3e147e254fd.mp4)
 
 
