@@ -9,11 +9,45 @@
       name="description"
       content="Web site created using create-react-app"
     />
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.8.1/mapbox-gl.css' rel='stylesheet' />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="manifest" href="/site.webmanifest">
+<link
+    rel="stylesheet"
+    href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.0/mapbox-gl-directions.css"
+    type="text/css"
+  />
     <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.0/css/line.css">
+
+    <!-- Mapbox GL Geocoder -->
+<link
+rel="stylesheet"
+href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.2/mapbox-gl-geocoder.css"
+integrity="sha384-Q5ss5fc5twNbwFQcNrpN/i/vZAtaMJNcvO/ncX9LlLl0x5j5hIl3rD8rUOjOZkeH"
+crossorigin="anonymous"
+/>
+<script
+src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.2/mapbox-gl-geocoder.min.js"
+integrity="sha384-eHsSAenM7yaM/AWZRGV7ZuB/J1KkC2uNWjyptwp7zA38kjCk7kb0eLlYl7Vyz8Wt"
+crossorigin="anonymous"
+></script>
+
+<!-- Mapbox GL Places -->
+<link
+rel="stylesheet"
+href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-places/v1.4.0/mapbox-gl-places.css"
+integrity="sha384-Te6r3U6utvpH6zLRJ6Rv+dn/RP01Z5JbZiP+BKj2eTWFl+5yJ1Bf5c5o5YPnM+ml"
+crossorigin="anonymous"
+/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script
+src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-places/v1.4.0/mapbox-gl-places.min.js"
+integrity="sha384-3qbi2sVgD/x27wT7TmBYm75Bz7UTPWKJ0tijph9tRv1tvc+I8gq3w0KB1HfOa2MZ"
+crossorigin="anonymous"
+></script>
+
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
@@ -42,7 +76,9 @@
 
       To begin the development, run `npm start` or `yarn start`.
       To create a production bundle, use `npm run build` or `yarn build`.
+
+          <script src="../path/to/flowbite/dist/flowbite.min.js"></script>
     -->
-    <script src="../path/to/flowbite/dist/flowbite.min.js"></script>
+
   </body>
 </html>

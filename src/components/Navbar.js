@@ -2,11 +2,13 @@ import { Fragment,React } from 'react'
 import { Disclosure, Menu, Transition } from '@headlessui/react'
 import { Bars3Icon, BellIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { NavLink } from 'react-router-dom'
-import { UilNotes } from '@iconscout/react-unicons'
+import { UilNotes,UilSignout } from '@iconscout/react-unicons'
+import { Button } from '@material-tailwind/react'
 
 const navigation = [
   { name: 'Dashboard', href: '/', current: true },
-  { name: 'Todo List',  href: '/Todolist',current: false },
+  { name: 'List',  href: '/Todolist',current: false },
+  { name: 'Weather',  href: '/Weather',current: false },
   { name: 'Routes',  href: '/Journeypath',current: false },
   { name: 'Automobiles', href: '/Automobile', current: false },
   { name: 'Homestays', href: '/Homestay', current: false },
@@ -18,7 +20,10 @@ function classNames(...classes) {
 
 export default function Navbar() {
  
-
+const logout=()=>{
+  localStorage.clear();
+  window.location.reload();
+}
   return (
     <Disclosure as="nav" className="bg-white top fixed top-0 z-50 w-full">
       {({ open }) => (
@@ -37,10 +42,10 @@ export default function Navbar() {
                 </Disclosure.Button>
               </div>
               <div className="flex flex-1 items-center justify-center sm:items-stretch sm:justify-start">
-                <div className="flex flex-shrink-0 items-center">
+                <div className="flex flex-shrink-0 mr-8 items-center">
                   
                     <UilNotes/>
-                    <span className='font-bold font-serif text-2xl'>Travellwith</span>
+                    <span className='font-bold font-serif text-2xl'>Travel With Us</span>
                 </div>
                 <div className="hidden sm:ml-6 sm:block">
                   <div className="flex space-x-4">
@@ -53,7 +58,7 @@ export default function Navbar() {
                           item.current ? 'bg-gray-900 text-white cursor-pointer' : 'text-black hover:bg-gray-700 hover:text-white cursor-pointer',
                           'px-3 py-2 rounded-md text-sm font-medium cursor-pointer'
                         )}
-                        aria-current={item.current ? 'page' : undefined}
+                       
                       >
                         {item.name}
                       </NavLink>
@@ -62,16 +67,16 @@ export default function Navbar() {
                 </div>
               </div>
               <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0">
-                <button
+                {/* <button
                   type="button"
                   className="rounded-full bg-gray-800 p-1 text-black hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800"
                 >
                   <span className="sr-only">View notifications</span>
                   <BellIcon className="h-6 w-6" aria-hidden="true" />
-                </button>
+                </button> */}
 
                 {/* Profile dropdown */}
-                <Menu as="div" className="relative ml-3">
+                {/* <Menu as="div" className="relative ml-3">
                   <div>
                     <Menu.Button className="flex rounded-full bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800">
                       <span className="sr-only">Open user menu</span>
@@ -102,29 +107,21 @@ export default function Navbar() {
                           </a>
                         )}
                       </Menu.Item>
+                      
                       <Menu.Item>
                         {({ active }) => (
                           <a
                             href="#"
                             className={classNames(active ? 'bg-gray-100' : '', 'block px-4 py-2 text-sm text-black')}
                           >
-                            Settings
-                          </a>
-                        )}
-                      </Menu.Item>
-                      <Menu.Item>
-                        {({ active }) => (
-                          <a
-                            href="#"
-                            className={classNames(active ? 'bg-gray-100' : '', 'block px-4 py-2 text-sm text-black')}
-                          >
-                            Sign out
+                            Sign in
                           </a>
                         )}
                       </Menu.Item>
                     </Menu.Items>
                   </Transition>
-                </Menu>
+                </Menu> */}
+                <Button onClick={logout} className="bg-gray-900 rounded-full"><UilSignout/></Button>
               </div>
             </div>
           </div>
