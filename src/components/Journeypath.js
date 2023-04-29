@@ -8,8 +8,8 @@ import MapboxDirections from '@mapbox/mapbox-gl-directions/dist/mapbox-gl-direct
 import './Journeypath.css'
 
 function Journeypath() {
-  mapboxgl.accessToken =
-  "pk.eyJ1IjoiZXNvdGVyaWM0NSIsImEiOiJjbGY0anA4YjYwbzV2M3pudDI5bDR1dThmIn0.mPW7S5k_nzfIyDJrpbVb3g"
+  mapboxgl.accessToken =process.env.REACT_APP_ACCESSTOKEN,
+ 
 
   // Get the user's current location and use it as the starting point for the directions
   navigator.geolocation.getCurrentPosition(position => {
