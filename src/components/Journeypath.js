@@ -8,7 +8,7 @@ import MapboxDirections from '@mapbox/mapbox-gl-directions/dist/mapbox-gl-direct
 import './Journeypath.css'
 
 function Journeypath() {
-  mapboxgl.accessToken =process.env.REACT_APP_ACCESSTOKEN,
+  mapboxgl.accessToken = process.env.REACT_APP_ACCESSTOKEN
  
 
   // Get the user's current location and use it as the starting point for the directions
