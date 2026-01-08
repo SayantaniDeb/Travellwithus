@@ -1,8 +1,9 @@
 /** @type {import('tailwindcss').Config} */
-const withMT = require("@material-tailwind/react/utils/withMT");
+import withMT from "@material-tailwind/react/utils/withMT";
 
-module.exports = withMT({
+export default withMT({
   content: [
+    "./index.html",
     "./src/**/*.{js,jsx,ts,tsx}",
     "./node_modules/flowbite/**/*.js"
   ],
@@ -10,7 +11,7 @@ module.exports = withMT({
     extend: {},
   },
   plugins: [
-    require('flowbite/plugin','@tailwindcss/aspect-ratio')
-    
+    require('flowbite/plugin'),
+    require('@tailwindcss/aspect-ratio')
   ],
 });
