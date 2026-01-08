@@ -1,6 +1,138 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-nav{
+
+/* Base styles */
+nav {
   background-color: black;
+}
+
+/* Custom responsive utilities */
+@layer components {
+  /* Container with responsive padding */
+  .container-responsive {
+    @apply w-full px-4 mx-auto;
+    @apply sm:px-6 md:px-8 lg:px-12;
+  }
+
+  /* Responsive text sizes */
+  .text-responsive-sm {
+    @apply text-xs sm:text-sm md:text-base;
+  }
+
+  .text-responsive-base {
+    @apply text-sm sm:text-base md:text-lg;
+  }
+
+  .text-responsive-lg {
+    @apply text-base sm:text-lg md:text-xl lg:text-2xl;
+  }
+
+  .text-responsive-xl {
+    @apply text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl;
+  }
+
+  /* Responsive spacing */
+  .py-responsive {
+    @apply py-4 sm:py-6 md:py-8 lg:py-12;
+  }
+
+  .mt-responsive {
+    @apply mt-16 sm:mt-20 md:mt-24;
+  }
+
+  /* Card styles */
+  .card-responsive {
+    @apply rounded-lg overflow-hidden shadow-lg bg-white;
+    @apply transform transition-all duration-300 hover:scale-105 hover:shadow-xl;
+  }
+
+  /* Button responsive */
+  .btn-responsive {
+    @apply px-3 py-2 text-sm sm:px-4 sm:py-2 sm:text-base md:px-6 md:py-3;
+  }
+
+  /* Grid responsive */
+  .grid-responsive {
+    @apply grid grid-cols-1 gap-4;
+    @apply sm:grid-cols-2 sm:gap-6;
+    @apply lg:grid-cols-3 lg:gap-8;
+    @apply xl:grid-cols-4;
+  }
+}
+
+/* Page layout for fixed footer */
+.page-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content {
+  flex: 1;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Better touch targets on mobile */
+@media (max-width: 640px) {
+  button, a {
+    min-height: 44px;
+  }
+  
+  /* Add bottom padding for mobile bottom nav */
+  .pb-mobile-nav {
+    padding-bottom: 80px;
+  }
+  
+  /* Main content area should account for bottom nav */
+  main, .main-content {
+    padding-bottom: 80px;
+  }
+}
+
+/* Modal animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.4s ease-out;
+}
+
+/* Location badge pulse animation */
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
 }
