@@ -57,7 +57,7 @@ function SearchBar() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="block w-full p-3 sm:p-4 pl-9 sm:pl-10 pr-28 sm:pr-32 text-sm sm:text-base text-gray-900 border border-gray-300 rounded-lg bg-white/90 backdrop-blur-sm focus:ring-zinc-500 focus:border-zinc-500 focus:outline-none shadow-lg" 
-            placeholder="Where do you wanna go? (e.g., Paris, Tokyo, Bali...)" 
+            placeholder="Where do you wanna go?" 
             required
           />
           <button 
