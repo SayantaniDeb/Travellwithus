@@ -118,7 +118,7 @@ function Todolist() {
   // Listen for auth state changes
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      console.log("Auth state changed:", currentUser?.uid);
+      
       setUser(currentUser);
       if (!currentUser) {
         setLoading(false);
@@ -136,13 +136,13 @@ function Todolist() {
 
     setLoading(true);
     setError(null);
-    console.log("Fetching todos for user:", user.uid);
+    
     
     const todosRef = collection(db, 'users', user.uid, 'todos');
     const q = query(todosRef, orderBy('createdAt', 'desc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      console.log("Got todos:", snapshot.docs.length);
+     
       const todosData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -151,7 +151,7 @@ function Todolist() {
       setToDo(todosData);
       setLoading(false);
     }, (err) => {
-      console.error("Error fetching todos:", err);
+      
       setError(err.message);
       setLoading(false);
     });
@@ -164,7 +164,7 @@ function Todolist() {
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'todos', id));
     } catch (err) {
-      console.error("Error removing todo:", err);
+      
       setError(err.message);
     }
   }
@@ -175,16 +175,16 @@ function Todolist() {
       return;
     }
     try {
-      console.log("Adding todo for user:", user.uid);
+      
       const todosRef = collection(db, 'users', user.uid, 'todos');
       await addDoc(todosRef, {
         item,
         createdAt: serverTimestamp(),
         completed: false
       });
-      console.log("Todo added successfully");
+      
     } catch (err) {
-      console.error("Error adding todo:", err);
+      
       setError(err.message);
     }
   }
