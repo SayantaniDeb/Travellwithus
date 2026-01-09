@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactGA from 'react-ga4';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
 import { auth, db } from '../Firebase';
@@ -44,18 +45,14 @@ const CURRENCIES = {
   BDT: { symbol: '৳', name: 'Bangladeshi Taka', countries: ['bangladesh'] },
 };
 
-// Get currency based on location name
-const getCurrencyFromLocation = (locationName) => {
-  if (!locationName) return 'USD';
-  const lowerLocation = locationName.toLowerCase();
-  
-  for (const [code, data] of Object.entries(CURRENCIES)) {
-    if (data.countries.some(country => lowerLocation.includes(country))) {
-      return code;
-    }
-  }
-  return 'USD';
-};
+
+// Initialize Google Analytics (GA4) only once
+const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
+if (GA_MEASUREMENT_ID) {
+  ReactGA.initialize(GA_MEASUREMENT_ID);
+}
+
+
 
 export default function TripPlanner() {
   const [searchParams] = useSearchParams();
@@ -77,22 +74,29 @@ export default function TripPlanner() {
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const { locationName } = useLocation();
 
+
   useEffect(() => {
+    // Track page view on mount
+    ReactGA.send({ hitType: 'pageview', page: window.location.pathname });
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        // Track sign-in event
+        ReactGA.event({
+          category: 'User',
+          action: 'Signed In',
+          label: currentUser.email || currentUser.uid
+        });
+      }
     });
     return () => unsubscribe();
   }, []);
 
   // Set currency and source location based on user's location
   useEffect(() => {
-    if (locationName) {
-      const detectedCurrency = getCurrencyFromLocation(locationName);
-      setCurrency(detectedCurrency);
-      // Set source location as default if not already set
-      if (!sourceLocation) {
-        setSourceLocation(locationName);
-      }
+    // Only set source location as default if not already set
+    if (locationName && !sourceLocation) {
+      setSourceLocation(locationName);
     }
   }, [locationName]);
 
@@ -106,6 +110,13 @@ export default function TripPlanner() {
   };
 
   const generatePlan = async () => {
+    // Track trip planning event
+    ReactGA.event({
+      category: 'Trip',
+      action: 'Planned Trip',
+      label: destination,
+      value: calculateDays()
+    });
     // Validate date order
     if (!startDate || !endDate) {
       setError('Please select both start and end dates.');
@@ -176,7 +187,7 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
 
       if (LLM_PROVIDER === 'groq') {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-        if (!apiKey) throw new Error('Groq API key not configured. Get it free at: https://console.groq.com/keys');
+        if (!apiKey) throw new Error('Groq API key not configured.');
 
         response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
@@ -238,19 +249,16 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
           setStep('calendar');
         } catch (parseErr) {
           // If JSON is truncated, try to fix common issues
-          console.warn('JSON parse error, attempting to fix:', parseErr.message);
-          
+          // Removed console.warn for production
           // Try adding closing brackets/braces
           let fixedText = cleanText;
           const openBraces = (cleanText.match(/{/g) || []).length;
           const closeBraces = (cleanText.match(/}/g) || []).length;
           const openBrackets = (cleanText.match(/\[/g) || []).length;
           const closeBrackets = (cleanText.match(/\]/g) || []).length;
-          
           // Add missing closing brackets and braces
           for (let i = 0; i < openBrackets - closeBrackets; i++) fixedText += ']';
           for (let i = 0; i < openBraces - closeBraces; i++) fixedText += '}';
-          
           try {
             const planData = JSON.parse(fixedText);
             planData.startDate = startDate;
@@ -269,7 +277,7 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
       }
 
     } catch (err) {
-      console.error('Error generating plan:', err);
+      // Removed console.error for production
       setError(err.message || 'Failed to generate plan');
       setStep('dates');
     } finally {
@@ -314,11 +322,11 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
 
   // Currency Spinner Component
   const CurrencySelector = ({ className = '' }) => (
-    <div className={className}>
+    <div className={className + ' w-full'}>
       <select
         value={currency}
         onChange={e => setCurrency(e.target.value)}
-        className="px-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
       >
         {Object.entries(CURRENCIES).map(([code, data]) => (
           <option key={code} value={code}>
@@ -334,8 +342,8 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
         <Navbar />
-        <div className="pt-20 sm:pt-24 pb-24 px-4">
-          <div className="max-w-md mx-auto">
+        <div className="pt-16 sm:pt-24 pb-16 px-2 sm:px-4">
+          <div className="max-w-xs sm:max-w-md mx-auto">
             {/* Back button */}
             <button 
               onClick={() => navigate('/home')}
@@ -350,13 +358,13 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
             {/* Card */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl overflow-hidden">
               {/* Header with gradient */}
-              <div className="px-6 py-5 bg-gradient-to-r from-blue-600 to-blue-700">
+              <div className="px-4 py-4 sm:px-6 sm:py-5 bg-gradient-to-r from-blue-600 to-blue-700">
                 <h1 className="text-xl font-semibold text-white">Plan Your Trip</h1>
                 <p className="text-blue-100 text-sm mt-1">to <span className="text-white font-medium">{destination}</span></p>
               </div>
 
               {/* Content */}
-              <div className="p-6 space-y-5">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
                 {error && (
                   <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm">
                     {error}
@@ -433,13 +441,8 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                 </div>
 
                 {/* Currency selector */}
-                <div className="flex items-center justify-between py-3 px-4 bg-zinc-100 rounded-xl border border-zinc-200">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-700">Currency</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      {locationName ? `Based on: ${locationName}` : 'Select your preferred currency'}
-                    </p>
-                  </div>
+                <div className="flex flex-col gap-2 py-3 px-4 bg-zinc-100 rounded-xl border border-zinc-200">
+                  <p className="text-sm font-medium text-zinc-700">Currency</p>
                   <CurrencySelector />
                 </div>
 
