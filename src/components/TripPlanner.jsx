@@ -106,6 +106,17 @@ export default function TripPlanner() {
   };
 
   const generatePlan = async () => {
+    // Validate date order
+    if (!startDate || !endDate) {
+      setError('Please select both start and end dates.');
+      return;
+    }
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (end < start) {
+      setError('End date cannot be before start date.');
+      return;
+    }
     const numDays = calculateDays();
     if (numDays < 1 || numDays > 30) {
       setError('Please select a valid date range (1-30 days)');
