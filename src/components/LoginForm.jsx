@@ -37,7 +37,7 @@ function LoginForm() {
     <div className="relative min-h-screen bg-gray-100 overflow-hidden">
       {/* Login Card */}
       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 w-[90%] max-w-xs sm:max-w-sm md:max-w-md mx-auto px-4">
-        <div className="bg-white/95 backdrop-blur-sm shadow-2xl rounded-2xl px-6 py-8 sm:px-8 sm:py-10">
+        <div className="bg-white backdrop-blur-sm shadow-2xl rounded-2xl px-6 py-8 sm:px-8 sm:py-10">
           <div className="text-center">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-4 sm:mb-6">
               Travel With Us
