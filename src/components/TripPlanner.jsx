@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import ReactGA from 'react-ga4';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
 import { auth, db } from '../Firebase';
@@ -45,14 +44,18 @@ const CURRENCIES = {
   BDT: { symbol: '৳', name: 'Bangladeshi Taka', countries: ['bangladesh'] },
 };
 
-
-// Initialize Google Analytics (GA4) only once
-const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
-if (GA_MEASUREMENT_ID) {
-  ReactGA.initialize(GA_MEASUREMENT_ID);
-}
-
-
+// Get currency based on location name
+const getCurrencyFromLocation = (locationName) => {
+  if (!locationName) return 'USD';
+  const lowerLocation = locationName.toLowerCase();
+  
+  for (const [code, data] of Object.entries(CURRENCIES)) {
+    if (data.countries.some(country => lowerLocation.includes(country))) {
+      return code;
+    }
+  }
+  return 'USD';
+};
 
 export default function TripPlanner() {
   const [searchParams] = useSearchParams();
@@ -74,29 +77,22 @@ export default function TripPlanner() {
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const { locationName } = useLocation();
 
-
   useEffect(() => {
-    // Track page view on mount
-    ReactGA.send({ hitType: 'pageview', page: window.location.pathname });
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        // Track sign-in event
-        ReactGA.event({
-          category: 'User',
-          action: 'Signed In',
-          label: currentUser.email || currentUser.uid
-        });
-      }
     });
     return () => unsubscribe();
   }, []);
 
   // Set currency and source location based on user's location
   useEffect(() => {
-    // Only set source location as default if not already set
-    if (locationName && !sourceLocation) {
-      setSourceLocation(locationName);
+    if (locationName) {
+      const detectedCurrency = getCurrencyFromLocation(locationName);
+      setCurrency(detectedCurrency);
+      // Set source location as default if not already set
+      if (!sourceLocation) {
+        setSourceLocation(locationName);
+      }
     }
   }, [locationName]);
 
@@ -110,22 +106,49 @@ export default function TripPlanner() {
   };
 
   const generatePlan = async () => {
-    // Track trip planning event
-    ReactGA.event({
-      category: 'Trip',
-      action: 'Planned Trip',
-      label: destination,
-      value: calculateDays()
-    });
-    // Validate date order
-    if (!startDate || !endDate) {
-      setError('Please select both start and end dates.');
+
+    // --- STRICT VALIDATIONS ---
+    // 1. Budget validation: must be pure numeric (no alpha/alphanumeric)
+    if (budgetAmount && !/^(\d+)(\.\d{1,2})?$/.test(budgetAmount.trim())) {
+      setError('Invalid budget amount');
       return;
     }
+
+    // 2. Place name validation (strict, no normalization, no guessing)
+    // List of valid city names (add more as needed)
+    const VALID_CITIES = [
+      'kolkata', 'delhi', 'mumbai', 'bengaluru', 'bangalore', 'chennai', 'hyderabad', 'pune', 'ahmedabad', 'jaipur',
+      'siliguri', 'guwahati', 'lucknow', 'kanpur', 'nagpur', 'indore', 'bhopal', 'patna', 'ranchi', 'coimbatore',
+      'kochi', 'kozhikode', 'trivandrum', 'varanasi', 'agra', 'amritsar', 'surat', 'noida', 'gurgaon', 'howrah',
+      'new york', 'san francisco', 'london', 'paris', 'berlin', 'tokyo', 'singapore', 'dubai', 'los angeles',
+      'boston', 'seattle', 'sydney', 'melbourne', 'vancouver', 'toronto', 'ottawa', 'washington', 'miami', 'houston',
+      'mountain view', 'zurich', 'geneva', 'amsterdam', 'madrid', 'rome', 'vienna', 'prague', 'budapest',
+      'hong kong', 'shanghai', 'beijing', 'bangkok', 'bali', 'goa', 'cape town', 'johannesburg', 'rio de janeiro', 'sao paulo',
+      'mexico city', 'istanbul', 'moscow', 'helsinki', 'stockholm', 'oslo', 'copenhagen', 'warsaw', 'brussels', 'lisbon',
+      'barcelona', 'athens', 'dubrovnik', 'krakow', 'munich', 'hamburg', 'frankfurt', 'siliguri'
+    ];
+    // Allow case-insensitive substring match (not strict equality)
+    const destTrimmed = destination.trim();
+    if (!destTrimmed || !VALID_CITIES.some(city => city.toLowerCase().includes(destTrimmed.toLowerCase()) || destTrimmed.toLowerCase().includes(city.toLowerCase()))) {
+      setError('Invalid place name');
+      return;
+    }
+
+    // 3. Date validation: start date must not be before today
+    if (!startDate || !endDate) {
+      setError('Invalid start date');
+      return;
+    }
+    const today = new Date();
+    today.setHours(0,0,0,0);
     const start = new Date(startDate);
     const end = new Date(endDate);
+    if (start < today) {
+      setError('Invalid start date');
+      return;
+    }
     if (end < start) {
-      setError('End date cannot be before start date.');
+      setError('End date cannot be before start date');
       return;
     }
     const numDays = calculateDays();
@@ -187,7 +210,7 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
 
       if (LLM_PROVIDER === 'groq') {
         const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-        if (!apiKey) throw new Error('Groq API key not configured.');
+        if (!apiKey) throw new Error('Groq API key not configured. Get it free at: https://console.groq.com/keys');
 
         response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
@@ -258,7 +281,7 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
         planData.currency = currency;
         planData.currencySymbol = currencySymbol;
 
-        // --- Budget validation ---
+        // --- STRICT COST VS BUDGET VALIDATION ---
         const enteredBudget = budgetAmount ? parseFloat(budgetAmount) : 0;
         let ticketCost = 0;
         if (planData.travelInfo?.estimatedTicketCost) {
@@ -276,20 +299,26 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
             return sum;
           }, 0);
         }
+        let totalBudget = 0;
+        if (planData.totalBudget) {
+          const match = planData.totalBudget.match(/[\d,.]+/);
+          if (match) totalBudget = parseFloat(match[0].replace(/,/g, ''));
+        }
         // If any cost exceeds budget, show error
         if (
           enteredBudget > 0 && (
             ticketCost > enteredBudget ||
             dayCosts > enteredBudget ||
-            planData.budgetAmount > enteredBudget
+            totalBudget > enteredBudget
           )
         ) {
-          setError('Not enough money for this trip. Please increase your budget or reduce trip costs.');
+          // Find the minimum required amount
+          const minRequired = Math.max(ticketCost, dayCosts, totalBudget);
+          setError(`Not enough money. Minimum required: ${currencySymbol}${minRequired}`);
           setStep('dates');
           setLoading(false);
           return;
         }
-
         setPlan(planData);
         setStep('calendar');
       } else {
@@ -297,7 +326,7 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
       }
 
     } catch (err) {
-      // Removed console.error for production
+      console.error('Error generating plan:', err);
       setError(err.message || 'Failed to generate plan');
       setStep('dates');
     } finally {
@@ -342,11 +371,11 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
 
   // Currency Spinner Component
   const CurrencySelector = ({ className = '' }) => (
-    <div className={className + ' w-full'}>
+    <div className={className}>
       <select
         value={currency}
         onChange={e => setCurrency(e.target.value)}
-        className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        className="px-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
       >
         {Object.entries(CURRENCIES).map(([code, data]) => (
           <option key={code} value={code}>
@@ -362,8 +391,8 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
         <Navbar />
-        <div className="pt-16 sm:pt-24 pb-16 px-2 sm:px-4">
-          <div className="max-w-xs sm:max-w-md mx-auto">
+        <div className="pt-20 sm:pt-24 pb-24 px-4">
+          <div className="max-w-md mx-auto">
             {/* Back button */}
             <button 
               onClick={() => navigate('/home')}
@@ -378,13 +407,13 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
             {/* Card */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl overflow-hidden">
               {/* Header with gradient */}
-              <div className="px-4 py-4 sm:px-6 sm:py-5 bg-gradient-to-r from-blue-600 to-blue-700">
+              <div className="px-6 py-5 bg-gradient-to-r from-blue-600 to-blue-700">
                 <h1 className="text-xl font-semibold text-white">Plan Your Trip</h1>
                 <p className="text-blue-100 text-sm mt-1">to <span className="text-white font-medium">{destination}</span></p>
               </div>
 
               {/* Content */}
-              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+              <div className="p-6 space-y-5">
                 {error && (
                   <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm">
                     {error}
@@ -440,11 +469,10 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                   </div>
                 </div>
 
-
-                {/* Currency selector FIRST */}
-                <div className="flex flex-col gap-2 py-3 px-4 bg-zinc-100 rounded-xl border border-zinc-200 mb-4">
-                  <p className="text-sm font-medium text-zinc-700">Currency</p>
-                  <CurrencySelector />
+                {/* Currency selector FIRST - contained inside card, no location tag */}
+                <div className="py-3 px-4 bg-zinc-100 rounded-xl border border-zinc-200">
+                  <label className="block text-sm font-medium text-zinc-700 mb-1.5">Currency</label>
+                  <CurrencySelector className="w-full" />
                 </div>
 
                 {/* Budget Input SECOND */}
@@ -494,24 +522,25 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
   // Step 2: Loading
   if (step === 'loading') {
     return (
-      <div className="min-h-screen flex flex-col pb-16 sm:pb-0 bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+      <div className="min-h-screen flex flex-col pb-16 bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
         <Navbar />
         <div className="flex-1 flex items-center justify-center px-4">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl w-full max-w-sm p-8 text-center">
-            <div className="w-14 h-14 border-3 border-zinc-900 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-            <h3 className="text-lg font-semibold text-zinc-900 mb-2">Creating Your Trip</h3>
-            <p className="text-zinc-500 text-sm">Planning {calculateDays()} days in {destination}...</p>
-            <div className="mt-6 flex justify-center gap-2">
-              <span className="w-2.5 h-2.5 bg-zinc-600 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
-              <span className="w-2.5 h-2.5 bg-zinc-700 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
-              <span className="w-2.5 h-2.5 bg-zinc-800 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
+          <div className="mx-auto w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-lg p-8 flex flex-col items-center gap-4">
+            {/* Spinner */}
+            <div className="relative flex items-center justify-center mb-2">
+              <span className="block w-12 h-12 border-4 border-zinc-200 border-t-blue-600 rounded-full animate-spin"></span>
+              <span className="absolute w-6 h-6 bg-blue-50 rounded-full animate-pulse"></span>
+            </div>
+            <h3 className="text-xl font-bold text-zinc-900 tracking-tight">Creating Your Plan</h3>
+            <p className="text-zinc-500 text-base text-center">Planning <span className="font-semibold text-blue-700">{calculateDays()} days</span> in <span className="font-semibold text-blue-700">{destination}</span>...</p>
+            <div className="flex gap-2 mt-4">
+              <span className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
+              <span className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
+              <span className="w-2.5 h-2.5 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
             </div>
           </div>
         </div>
         <div className="w-full fixed bottom-0">
-          {/* Footer always visible */}
-          {typeof window !== 'undefined' && window.innerWidth < 640 ? null : <div style={{height: '64px'}} />} {/* Spacer for mobile nav */}
-          {/* Use Bottom component for footer */}
           <div className="hidden sm:block">
             <Bottom />
           </div>
