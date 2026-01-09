@@ -30,6 +30,8 @@ const CATEGORIES = [
 ];
 
 export default function BudgetTracker() {
+  // Minimum trip cost (can be dynamic, here set as example)
+  const MIN_TRIP_COST = 100; // Change as needed or make dynamic
   const { tripId } = useParams();
   const navigate = useNavigate();
   
@@ -46,6 +48,7 @@ export default function BudgetTracker() {
   const [expenseCategory, setExpenseCategory] = useState('food');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
   const [totalBudget, setTotalBudgetInput] = useState('');
+  const [selectedCurrency, setSelectedCurrency] = useState('USD');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -67,6 +70,7 @@ export default function BudgetTracker() {
         if (tripDoc.exists()) {
           setTrip({ id: tripDoc.id, ...tripDoc.data() });
           setTotalBudgetInput(tripDoc.data().budgetAmount?.toString() || '');
+          setSelectedCurrency(tripDoc.data().currency || 'USD');
         }
         setLoading(false);
       } catch (err) {
@@ -133,16 +137,22 @@ export default function BudgetTracker() {
   };
 
   const setBudget = async () => {
-    if (!totalBudget || parseFloat(totalBudget) <= 0) {
+    const budgetValue = parseFloat(totalBudget);
+    if (!totalBudget || budgetValue <= 0) {
       alert('Please enter a valid budget');
+      return;
+    }
+    if (budgetValue < MIN_TRIP_COST) {
+      alert('Too less money, earn some');
       return;
     }
 
     try {
       await updateDoc(doc(db, 'users', user.uid, 'trips', tripId), {
-        budgetAmount: parseFloat(totalBudget)
+        budgetAmount: parseFloat(totalBudget),
+        currency: selectedCurrency
       });
-      setTrip({ ...trip, budgetAmount: parseFloat(totalBudget) });
+      setTrip({ ...trip, budgetAmount: parseFloat(totalBudget), currency: selectedCurrency });
       setShowSetBudget(false);
     } catch (err) {
       console.error('Error setting budget:', err);
@@ -394,8 +404,8 @@ export default function BudgetTracker() {
 
       {/* Add Expense Modal */}
       {showAddExpense && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-zinc-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[101] flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-xs sm:max-w-sm shadow-2xl border border-zinc-200 max-h-[32rem] flex flex-col justify-start text-xs overflow-hidden">
             <div className="p-5 border-b border-zinc-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-zinc-900">Add Expense</h3>
               <button
@@ -411,44 +421,44 @@ export default function BudgetTracker() {
             <div className="p-5 space-y-4">
               {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Amount ({currencySymbol})</label>
+                <label className="block text-[10px] font-medium text-zinc-700 mb-1">Amount ({currencySymbol})</label>
                 <input
                   type="number"
                   value={expenseAmount}
                   onChange={(e) => setExpenseAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-4 py-3 bg-white border border-zinc-300 rounded-xl text-zinc-900 text-lg font-semibold placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent"
+                  className="w-full px-2 py-1 bg-white border border-zinc-300 rounded-xl text-zinc-900 text-xs font-semibold placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Description</label>
+                <label className="block text-[10px] font-medium text-zinc-700 mb-1">Description</label>
                 <input
                   type="text"
                   value={expenseDescription}
                   onChange={(e) => setExpenseDescription(e.target.value)}
                   placeholder="What did you spend on?"
-                  className="w-full px-4 py-3 bg-white border border-zinc-300 rounded-xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent"
+                  className="w-full px-2 py-1 bg-white border border-zinc-300 rounded-xl text-zinc-900 placeholder-zinc-400 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent"
                 />
               </div>
 
               {/* Category */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Category</label>
-                <div className="grid grid-cols-3 gap-2">
+                <label className="block text-[10px] font-medium text-zinc-700 mb-1">Category</label>
+                <div className="grid grid-cols-3 gap-1">
                   {CATEGORIES.map((cat) => (
                     <button
                       key={cat.id}
                       onClick={() => setExpenseCategory(cat.id)}
-                      className={`p-3 rounded-xl text-center transition-all ${
+                      className={`p-1 rounded-xl text-center transition-all ${
                         expenseCategory === cat.id 
                           ? 'bg-black text-white' 
                           : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                       }`}
                     >
-                      <span className="text-xl block mb-1">{cat.icon}</span>
-                      <span className="text-xs">{cat.name}</span>
+                      <span className="text-base block mb-0.5">{cat.icon}</span>
+                      <span className="text-[10px]">{cat.name}</span>
                     </button>
                   ))}
                 </div>
@@ -456,19 +466,19 @@ export default function BudgetTracker() {
 
               {/* Date */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Date</label>
+                <label className="block text-[10px] font-medium text-zinc-700 mb-1">Date</label>
                 <input
                   type="date"
                   value={expenseDate}
                   onChange={(e) => setExpenseDate(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-zinc-300 rounded-xl text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent"
+                  className="w-full px-2 py-1 bg-white border border-zinc-300 rounded-xl text-zinc-900 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent"
                 />
               </div>
 
               {/* Submit */}
               <button
                 onClick={addExpense}
-                className="w-full py-3.5 bg-black hover:bg-gray-800 text-white font-medium rounded-xl transition-all shadow-lg"
+                className="w-full py-2 bg-black hover:bg-gray-800 text-white font-medium rounded-xl transition-all shadow-lg text-xs"
               >
                 Add Expense
               </button>
@@ -479,7 +489,7 @@ export default function BudgetTracker() {
 
       {/* Set Budget Modal */}
       {showSetBudget && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[101] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl border border-zinc-200">
             <div className="p-5 border-b border-zinc-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-zinc-900">Set Budget</h3>
@@ -492,11 +502,24 @@ export default function BudgetTracker() {
                 </svg>
               </button>
             </div>
-            
             <div className="p-5 space-y-4">
+              {/* Currency selection first */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Currency</label>
+                <select
+                  value={selectedCurrency}
+                  onChange={e => setSelectedCurrency(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-zinc-300 rounded-xl text-zinc-900 text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent text-center"
+                >
+                  {Object.entries(CURRENCIES).map(([code, info]) => (
+                    <option key={code} value={code}>{info.symbol} {info.name}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Amount input second */}
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-                  Total Budget ({currencySymbol})
+                  Total Budget ({CURRENCIES[selectedCurrency]?.symbol || '$'})
                 </label>
                 <input
                   type="number"
@@ -509,7 +532,6 @@ export default function BudgetTracker() {
                   This is the total amount you plan to spend on this trip
                 </p>
               </div>
-
               <button
                 onClick={setBudget}
                 className="w-full py-3.5 bg-black hover:bg-gray-800 text-white font-medium rounded-xl transition-all shadow-lg"

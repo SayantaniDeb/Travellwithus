@@ -521,16 +521,31 @@ function Community() {
                     <div className="bg-zinc-50 px-4 py-3 space-y-3">
                       {post.replies.map((reply) => (
                         <div key={reply.id} className="flex gap-2">
+                          {/* Make avatar clickable */}
                           {reply.authorPhoto ? (
-                            <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                            <img
+                              src={reply.authorPhoto}
+                              alt=""
+                              className="w-8 h-8 rounded-full object-cover flex-shrink-0 cursor-pointer"
+                              onClick={() => navigate(`/profile?uid=${reply.authorId}`)}
+                            />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-medium text-xs flex-shrink-0">
+                            <div
+                              className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-medium text-xs flex-shrink-0 cursor-pointer"
+                              onClick={() => navigate(`/profile?uid=${reply.authorId}`)}
+                            >
                               {getInitials(reply.authorName)}
                             </div>
                           )}
                           <div className="flex-1 bg-white rounded-xl px-3 py-2">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-zinc-900 text-xs">{reply.authorName}</span>
+                              {/* Make name clickable */}
+                              <span
+                                className="font-medium text-zinc-900 text-xs cursor-pointer hover:underline"
+                                onClick={() => navigate(`/profile?uid=${reply.authorId}`)}
+                              >
+                                {reply.authorName}
+                              </span>
                               <span className="text-xs text-zinc-400">{formatDate(reply.createdAt)}</span>
                             </div>
                             <p className="text-sm text-zinc-700">{reply.content}</p>

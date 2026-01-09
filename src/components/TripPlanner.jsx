@@ -238,40 +238,60 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
         cleanText = cleanText.trim();
 
         // Try to fix truncated JSON by attempting to close it
+        let planData;
         try {
-          const planData = JSON.parse(cleanText);
-          planData.startDate = startDate;
-          planData.endDate = endDate;
-          planData.source = sourceLocation;
-          planData.currency = currency;
-          planData.currencySymbol = currencySymbol;
-          setPlan(planData);
-          setStep('calendar');
+          planData = JSON.parse(cleanText);
         } catch (parseErr) {
           // If JSON is truncated, try to fix common issues
-          // Removed console.warn for production
-          // Try adding closing brackets/braces
           let fixedText = cleanText;
           const openBraces = (cleanText.match(/{/g) || []).length;
           const closeBraces = (cleanText.match(/}/g) || []).length;
           const openBrackets = (cleanText.match(/\[/g) || []).length;
           const closeBrackets = (cleanText.match(/\]/g) || []).length;
-          // Add missing closing brackets and braces
           for (let i = 0; i < openBrackets - closeBrackets; i++) fixedText += ']';
           for (let i = 0; i < openBraces - closeBraces; i++) fixedText += '}';
-          try {
-            const planData = JSON.parse(fixedText);
-            planData.startDate = startDate;
-            planData.endDate = endDate;
-            planData.source = sourceLocation;
-            planData.currency = currency;
-            planData.currencySymbol = currencySymbol;
-            setPlan(planData);
-            setStep('calendar');
-          } catch (fixErr) {
-            throw new Error('The AI response was truncated. Please try again with fewer days or a shorter trip.');
-          }
+          planData = JSON.parse(fixedText);
         }
+        planData.startDate = startDate;
+        planData.endDate = endDate;
+        planData.source = sourceLocation;
+        planData.currency = currency;
+        planData.currencySymbol = currencySymbol;
+
+        // --- Budget validation ---
+        const enteredBudget = budgetAmount ? parseFloat(budgetAmount) : 0;
+        let ticketCost = 0;
+        if (planData.travelInfo?.estimatedTicketCost) {
+          // Extract number from string like "$123"
+          const match = planData.travelInfo.estimatedTicketCost.match(/[\d,.]+/);
+          if (match) ticketCost = parseFloat(match[0].replace(/,/g, ''));
+        }
+        let dayCosts = 0;
+        if (Array.isArray(planData.days)) {
+          dayCosts = planData.days.reduce((sum, day) => {
+            if (day.estimatedCost) {
+              const match = day.estimatedCost.match(/[\d,.]+/);
+              if (match) return sum + parseFloat(match[0].replace(/,/g, ''));
+            }
+            return sum;
+          }, 0);
+        }
+        // If any cost exceeds budget, show error
+        if (
+          enteredBudget > 0 && (
+            ticketCost > enteredBudget ||
+            dayCosts > enteredBudget ||
+            planData.budgetAmount > enteredBudget
+          )
+        ) {
+          setError('Not enough money for this trip. Please increase your budget or reduce trip costs.');
+          setStep('dates');
+          setLoading(false);
+          return;
+        }
+
+        setPlan(planData);
+        setStep('calendar');
       } else {
         throw new Error('No response from AI');
       }
@@ -420,7 +440,14 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                   </div>
                 </div>
 
-                {/* Budget Input */}
+
+                {/* Currency selector FIRST */}
+                <div className="flex flex-col gap-2 py-3 px-4 bg-zinc-100 rounded-xl border border-zinc-200 mb-4">
+                  <p className="text-sm font-medium text-zinc-700">Currency</p>
+                  <CurrencySelector />
+                </div>
+
+                {/* Budget Input SECOND */}
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                     Your Budget <span className="text-zinc-400">(optional)</span>
@@ -438,12 +465,6 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                     />
                   </div>
                   <p className="text-xs text-zinc-500 mt-1.5">AI will plan activities within your budget</p>
-                </div>
-
-                {/* Currency selector */}
-                <div className="flex flex-col gap-2 py-3 px-4 bg-zinc-100 rounded-xl border border-zinc-200">
-                  <p className="text-sm font-medium text-zinc-700">Currency</p>
-                  <CurrencySelector />
                 </div>
 
                 {/* Days indicator */}

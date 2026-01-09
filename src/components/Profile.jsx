@@ -67,17 +67,22 @@ function Profile() {
       const profileRef = doc(db, 'user_profiles', userId);
       const profileSnap = await getDoc(profileRef);
       
-      // Get Google photo URL from Firebase Auth (this is the default)
-      const googlePhotoURL = auth.currentUser?.photoURL || '';
-
+      // Get Google photo URL from Firebase Auth (for own profile only)
+      let googlePhotoURL = '';
+      let displayName = '';
+      // If viewing own profile, use currentUser info
+      if (user && user.uid === userId) {
+        googlePhotoURL = user.photoURL || '';
+        displayName = user.displayName || user.email?.split('@')[0] || '';
+      }
       if (profileSnap.exists()) {
         const data = profileSnap.data();
         setProfile({
-          displayName: data.displayName || auth.currentUser?.displayName || '',
+          displayName: data.displayName || displayName || userId,
           bio: data.bio || '',
           location: data.location || '',
           website: data.website || '',
-          // Use custom photo if set, otherwise use Google photo
+          // Use custom photo if set, otherwise use Google photo (only for own profile)
           photoURL: data.photoURL || googlePhotoURL,
           googlePhotoURL: googlePhotoURL, // Store Google photo as fallback
           travelStyle: data.travelStyle || '',
@@ -86,19 +91,18 @@ function Profile() {
           joinedAt: data.joinedAt
         });
       } else {
-        // Create initial profile with Google photo as default
+        // Create initial profile
         const initialProfile = {
-          displayName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || '',
+          displayName: displayName || userId,
           bio: '',
           location: '',
           website: '',
-          photoURL: googlePhotoURL, // Use Google photo as default
+          photoURL: googlePhotoURL, // Only for own profile
           travelStyle: '',
           favoriteDestination: '',
           countriesVisited: 0,
           joinedAt: serverTimestamp(),
           userId: userId,
-          email: auth.currentUser?.email
         };
         await setDoc(profileRef, initialProfile);
         setProfile({ ...initialProfile, googlePhotoURL: googlePhotoURL });
@@ -218,7 +222,7 @@ function Profile() {
                 <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">
                   {profile.displayName || 'Traveler'}
                 </h1>
-                <p className="text-zinc-500 text-sm">{user.email}</p>
+                
               </div>
 
               {/* Bio */}
