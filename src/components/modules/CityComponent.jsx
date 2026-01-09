@@ -1,5 +1,3 @@
-import React from 'react';
-
 const CityComponent = (props) => {
   const { updateCity, fetchWeather, loading, city } = props;
   

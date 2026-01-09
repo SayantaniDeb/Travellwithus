@@ -135,7 +135,9 @@ function Weather() {
         </div>
       </div>
 
-      <Bottom />
+      <div className="hidden sm:block">
+        <Bottom />
+      </div>
     </div>
   );
 }

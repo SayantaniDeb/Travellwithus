@@ -1,41 +1,65 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
+import { signOut } from 'firebase/auth';
+import { auth } from '../Firebase';
+import { useLocation as useGeoLocation } from '../context/LocationContext';
 import { 
-  UilCloudSun, 
-  UilMapMarkerAlt, 
-  UilCar, 
-  UilHome,
-  UilListUl,
-  UilEstate,
-  UilCalendarAlt,
-  UilWallet
-} from '@iconscout/react-unicons';
+  HomeIcon,
+  CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
+  MapPinIcon,
+  UserIcon,
+  WalletIcon,
+  CloudIcon,
+  ClipboardDocumentListIcon,
+  TruckIcon,
+  BuildingOfficeIcon,
+  EllipsisHorizontalIcon
+} from '@heroicons/react/24/outline';
 
 const mobileNavItems = [
-  { name: 'Home', href: '/home', icon: UilEstate },
-  { name: 'Trips', href: '/saved-trips', icon: UilCalendarAlt },
-  { name: 'Budget', href: '/budgets', icon: UilWallet },
-  { name: 'Routes', href: '/Journeypath', icon: UilMapMarkerAlt },
-  { name: 'More', href: null, icon: null, isDropup: true },
+  { name: 'Home', href: '/home', icon: HomeIcon },
+  { name: 'Trips', href: '/saved-trips', icon: CalendarDaysIcon },
+  { name: 'Community', href: '/community', icon: ChatBubbleLeftRightIcon },
+ 
+  { name: 'Budget', href: '/budgets', icon: WalletIcon },
+  { name: 'More', href: null, icon: EllipsisHorizontalIcon, isDropup: true },
 ];
 
 const moreItems = [
-  { name: 'Weather', href: '/Weather', icon: UilCloudSun },
-  { name: 'Todo List', href: '/Todolist', icon: UilListUl },
-  { name: 'Cars', href: '/Automobile', icon: UilCar },
-  { name: 'Stays', href: '/Homestay', icon: UilHome },
+  
+  { name: 'Weather', href: '/Weather', icon: CloudIcon },
+  { name: 'Routes', href: '/Journeypath', icon: MapPinIcon },
+  { name: 'Todo List', href: '/Todolist', icon: ClipboardDocumentListIcon },
+  { name: 'Cars', href: '/Automobile', icon: TruckIcon },
+  { name: 'Stays', href: '/Homestay', icon: BuildingOfficeIcon },
 ];
 
 export default function MobileBottomNav() {
   const location = useLocation();
-  const [showMore, setShowMore] = React.useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const geo = useGeoLocation();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      localStorage.clear();
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error signing out:', error);
+      localStorage.clear();
+      window.location.href = '/';
+    }
+  };
 
   return (
     <>
       {/* More dropdown */}
       {showMore && (
         <div 
-          className="sm:hidden fixed bottom-16 right-0 z-50 bg-white rounded-t-xl shadow-lg border border-gray-200 w-32"
+          className="sm:hidden fixed bottom-16 right-0 z-50 bg-white rounded-t-xl shadow-lg border border-gray-200 w-40"
           onClick={() => setShowMore(false)}
         >
           {moreItems.map((item) => {
@@ -57,6 +81,29 @@ export default function MobileBottomNav() {
         </div>
       )}
 
+      {/* Logout confirmation popup */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-xs w-full text-center">
+            <h2 className="text-lg font-semibold mb-3 text-zinc-800">Are you sure?</h2>
+            <div className="flex gap-4 justify-center mt-4">
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium shadow hover:bg-red-700 transition-colors"
+              >
+                Yes, Logout
+              </button>
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg font-medium shadow hover:bg-zinc-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Backdrop for more menu */}
       {showMore && (
         <div 
@@ -71,6 +118,7 @@ export default function MobileBottomNav() {
             if (item.isDropup) {
               // More button
               const isMoreActive = moreItems.some(m => location.pathname === m.href);
+              const MoreIcon = item.icon;
               return (
                 <button
                   key="more"
@@ -80,9 +128,7 @@ export default function MobileBottomNav() {
                   }`}
                 >
                   <div className={`p-1.5 rounded-full transition-colors ${isMoreActive ? 'bg-blue-100' : ''}`}>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
-                    </svg>
+                    <MoreIcon className="w-5 h-5" />
                   </div>
                   <span className={`text-[10px] mt-0.5 font-medium ${isMoreActive ? 'text-blue-600' : ''}`}>
                     More

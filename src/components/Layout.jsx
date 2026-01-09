@@ -5,10 +5,8 @@ import LocationPermissionModal from './LocationPermissionModal';
 
 export default function Layout() {
   const location = useLocation();
-  
   // Don't show bottom nav on login page
   const showBottomNav = location.pathname !== '/';
-
   return (
     <>
       <Outlet />

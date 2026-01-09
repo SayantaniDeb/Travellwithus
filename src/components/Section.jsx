@@ -1,11 +1,13 @@
-import React from 'react'
+
 import Lottie from 'react-lottie'
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import CardList from './Cardlist';
 import Navbar from './Navbar';
 import Bottom from './bottomfoot';
+
 
 function SearchBar() {
   const [query, setQuery] = useState('');
@@ -14,6 +16,8 @@ function SearchBar() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (query.trim()) {
+      // Save destination to localStorage for Routes page
+      localStorage.setItem('travelDestination', query.trim());
       // Navigate to trip planner page with destination as query param
       navigate(`/plan-trip?destination=${encodeURIComponent(query.trim())}`);
     }
@@ -72,54 +76,63 @@ function SearchBar() {
 }
 
 function Section() {
-    const [animationData, setAnimationData] = useState(null);
-    
-    useEffect(() => {
-        axios
-          .get('https://assets3.lottiefiles.com/packages/lf20_bhebjzpu.json')
-          .then((res) => {
-            setAnimationData(res.data);
-          })
-          .catch((err) => {
-            console.error(err);
-          });
-      }, []);
-      
-      const defaultOptions = {
-        loop: true,
-        autoplay: true,
-        animationData,
-        rendererSettings: {
-          preserveAspectRatio: 'xMidYMid slice',
-        },
-      };
-      
-      return(
-        <div className="min-h-screen flex flex-col pb-16 sm:pb-0">
-          <Navbar/>
-          <div className='relative flex-1 flex items-center justify-center sm:block'>
-            {/* Mobile Title - Positioned on top of Lottie */}
-            <h1 className="sm:hidden absolute top-20 left-0 right-0 z-10 text-center font-serif text-3xl font-bold text-gray-900">
-              Travel With Us
-            </h1>
-            
-            {/* Lottie Animation - full height on mobile, responsive on larger screens */}
-            <div className="w-full h-[calc(100vh-120px)] sm:h-[60vh] md:h-[70vh] lg:h-screen">
-              <Lottie 
-                options={defaultOptions} 
-                style={{ width: '100%', height: '100%' }}
-              />
-            </div>
-            <SearchBar />
+  const [animationData, setAnimationData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    axios
+      .get('https://assets3.lottiefiles.com/packages/lf20_bhebjzpu.json')
+      .then((res) => {
+        setAnimationData(res.data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  const defaultOptions = {
+    loop: true,
+    autoplay: true,
+    animationData,
+    rendererSettings: {
+      preserveAspectRatio: 'xMidYMid slice',
+    },
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col pb-16 sm:pb-0">
+      <Navbar/>
+      <div className='relative flex-1 flex items-center justify-center sm:block'>
+        {/* Mobile Title - Positioned on top of Lottie */}
+        <h1 className="sm:hidden absolute top-20 left-0 right-0 z-10 text-center font-serif text-3xl font-bold text-gray-900">
+          Travel With Us
+        </h1>
+
+        {/* Buffering spinner while loading animation */}
+        {loading ? (
+          <div className="w-full h-[calc(100vh-120px)] sm:h-[60vh] md:h-[70vh] lg:h-screen flex items-center justify-center">
+            <div className="w-12 h-12 border-4 border-blue-300 border-t-blue-600 rounded-full animate-spin mx-auto" />
           </div>
-          
-          {/* Features Section */}
-          <CardList />
-          
-          {/* Footer */}
-          <Bottom/>
-        </div>
-      )
-    };
+        ) : (
+          <div className="w-full h-[calc(100vh-120px)] sm:h-[60vh] md:h-[70vh] lg:h-screen">
+            <Lottie 
+              options={defaultOptions} 
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+        )}
+        <SearchBar />
+      </div>
+
+      {/* Features Section */}
+      <CardList />
+      <div className="hidden sm:block">
+        <Bottom />
+      </div>
+    </div>
+  )
+}
 
 export default Section

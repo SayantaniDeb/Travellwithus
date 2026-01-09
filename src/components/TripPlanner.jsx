@@ -5,6 +5,7 @@ import { auth, db } from '../Firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import Navbar from './Navbar';
+import Bottom from './bottomfoot';
 
 const LLM_PROVIDER = 'groq'; // 'groq', 'gemini', or 'openai'
 
@@ -300,43 +301,20 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
 
   const getMinDate = () => new Date().toISOString().split('T')[0];
 
-  // Currency Dropdown Component
+  // Currency Spinner Component
   const CurrencySelector = ({ className = '' }) => (
-    <div className={`relative ${className}`}>
-      <button
-        type="button"
-        onClick={() => setShowCurrencyDropdown(!showCurrencyDropdown)}
-        className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 transition-all shadow-sm hover:shadow-md"
+    <div className={className}>
+      <select
+        value={currency}
+        onChange={e => setCurrency(e.target.value)}
+        className="px-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
       >
-        <span className="text-zinc-900 font-semibold">{CURRENCIES[currency]?.symbol}</span>
-        <span>{currency}</span>
-        <svg className={`w-4 h-4 text-zinc-400 transition-transform ${showCurrencyDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      
-      {showCurrencyDropdown && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowCurrencyDropdown(false)} />
-          <div className="absolute right-0 top-full mt-2 w-60 max-h-72 overflow-y-auto bg-white border border-zinc-200/60 rounded-2xl shadow-2xl shadow-zinc-200/50 z-50 backdrop-blur-sm">
-            <div className="p-2">
-              {Object.entries(CURRENCIES).map(([code, data]) => (
-                <button
-                  key={code}
-                  onClick={() => { setCurrency(code); setShowCurrencyDropdown(false); }}
-                  className={`w-full text-left px-3 py-2.5 text-sm rounded-xl flex items-center justify-between transition-all ${currency === code ? 'bg-black text-white shadow-lg' : 'text-zinc-600 hover:bg-zinc-50'}`}
-                >
-                  <span className="flex items-center gap-3">
-                    <span className={`w-8 text-center font-semibold ${currency === code ? 'text-white' : 'text-zinc-800'}`}>{data.symbol}</span>
-                    <span>{data.name}</span>
-                  </span>
-                  <span className={`text-xs ${currency === code ? 'text-zinc-300' : 'text-zinc-400'}`}>{code}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+        {Object.entries(CURRENCIES).map(([code, data]) => (
+          <option key={code} value={code}>
+            {data.symbol} {code} - {data.name}
+          </option>
+        ))}
+      </select>
     </div>
   );
 
@@ -458,7 +436,7 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                 {startDate && endDate && (
                   <div className="text-center py-5 bg-black rounded-xl shadow-lg">
                     <span className="text-4xl font-bold text-white">{calculateDays()}</span>
-                    <span className="text-zinc-300 ml-2">day{calculateDays() > 1 ? 's' : ''}</span>
+                    <span className="text-white ml-2">day{calculateDays() > 1 ? 's' : ''}</span>
                   </div>
                 )}
 
@@ -481,15 +459,26 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
   // Step 2: Loading
   if (step === 'loading') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50 flex items-center justify-center px-4">
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl w-full max-w-sm p-8 text-center">
-          <div className="w-14 h-14 border-3 border-zinc-900 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-          <h3 className="text-lg font-semibold text-zinc-900 mb-2">Creating Your Trip</h3>
-          <p className="text-zinc-500 text-sm">Planning {calculateDays()} days in {destination}...</p>
-          <div className="mt-6 flex justify-center gap-2">
-            <span className="w-2.5 h-2.5 bg-zinc-600 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
-            <span className="w-2.5 h-2.5 bg-zinc-700 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
-            <span className="w-2.5 h-2.5 bg-zinc-800 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
+      <div className="min-h-screen flex flex-col pb-16 sm:pb-0 bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl w-full max-w-sm p-8 text-center">
+            <div className="w-14 h-14 border-3 border-zinc-900 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+            <h3 className="text-lg font-semibold text-zinc-900 mb-2">Creating Your Trip</h3>
+            <p className="text-zinc-500 text-sm">Planning {calculateDays()} days in {destination}...</p>
+            <div className="mt-6 flex justify-center gap-2">
+              <span className="w-2.5 h-2.5 bg-zinc-600 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
+              <span className="w-2.5 h-2.5 bg-zinc-700 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
+              <span className="w-2.5 h-2.5 bg-zinc-800 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
+            </div>
+          </div>
+        </div>
+        <div className="w-full fixed bottom-0">
+          {/* Footer always visible */}
+          {typeof window !== 'undefined' && window.innerWidth < 640 ? null : <div style={{height: '64px'}} />} {/* Spacer for mobile nav */}
+          {/* Use Bottom component for footer */}
+          <div className="hidden sm:block">
+            <Bottom />
           </div>
         </div>
       </div>

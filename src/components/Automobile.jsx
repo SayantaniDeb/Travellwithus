@@ -1,67 +1,77 @@
-import React from 'react'
-import Navbar from './Navbar'
-import logo1 from '../img/car1.jpeg'
-import logo2 from '../img/car2.jpeg'
-import logo3 from '../img/car3.jpg'
-import logo4 from '../img/car4.jpg'
-import cab1 from '../img/cab1.jpg'
-import cab2 from '../img/cab2.jpg'
+import React from 'react';
+import Navbar from './Navbar';
+import logo1 from '../img/car1.jpeg';
+import logo2 from '../img/car2.jpeg';
+import logo3 from '../img/car3.jpg';
+import logo4 from '../img/car4.jpg';
+import cab1 from '../img/cab1.jpg';
+import cab2 from '../img/cab2.jpg';
 import { Button } from "@material-tailwind/react";
-import Bottom from './bottomfoot'
+import Bottom from './bottomfoot';
 
 const products = [
-    {
-      id: 1,
-      name: '4 Seater Car',
-      href: '#',
-      price: 'Rs. 100/hr',
-      imageSrc: logo1,
-      imageAlt: 'car1',
-      seats: '4 seats',
-    },
-    {
-      id: 2,
-      name: '7 Seater Car',
-      href: '#',
-      price: 'Rs. 200/hr',
-      imageSrc: logo2,
-      imageAlt: 'car2',
-      seats: '7 seats',
-    },
-    {
-      id: 3,
-      name: 'Royal Enfield Bike',
-      href: '#',
-      price: 'Rs. 500/hr',
-      imageSrc: logo3,
-      imageAlt: 'car3',
-      seats: '2 seats',
-    },
-    {
-      id: 4,
-      name: 'Adventure Cycle',
-      href: '#',
-      price: 'Rs. 10/hr',
-      imageSrc: logo4,
-      imageAlt: 'car4',
-      seats: '1 seat',
-    },
-  ]
+  {
+    id: 1,
+    name: '4 Seater Car',
+    href: '#',
+    price: 'Rs. 100/hr',
+    imageSrc: logo1,
+    imageAlt: 'car1',
+    seats: '4 seats',
+  },
+  {
+    id: 2,
+    name: '7 Seater Car',
+    href: '#',
+    price: 'Rs. 200/hr',
+    imageSrc: logo2,
+    imageAlt: 'car2',
+    seats: '7 seats',
+  },
+  {
+    id: 3,
+    name: 'Royal Enfield Bike',
+    href: '#',
+    price: 'Rs. 500/hr',
+    imageSrc: logo3,
+    imageAlt: 'car3',
+    seats: '2 seats',
+  },
+  {
+    id: 4,
+    name: 'Adventure Cycle',
+    href: '#',
+    price: 'Rs. 10/hr',
+    imageSrc: logo4,
+    imageAlt: 'car4',
+    seats: '1 seat',
+  },
+];
 
 function Automobile() {
   return (
-    <div className="min-h-screen flex flex-col pb-16 sm:pb-0">
+    <div className="min-h-screen flex flex-col pb-16 sm:pb-0 relative">
       <Navbar />
-      <div className="flex-1 mt-16 sm:mt-20">
-        <Layout />
-        <RideServices />
+      {/* Banner overlay */}
+      <div className="absolute top-16 left-0 w-full z-10 flex justify-center">
+        <div className="bg-blue-600/80 text-white px-6 py-2 rounded-b-xl shadow-lg text-center text-base font-semibold">
+          Automobile Services are coming soon and currently inaccessible. Please check back after the next update!
+        </div>
       </div>
-      <Bottom />
+      <div className="flex-1 mt-16 sm:mt-20">
+        <div className="opacity-40 pointer-events-none">
+          <Layout />
+          <RideServices />
+        </div>
+      </div>
+      <div className="hidden sm:block">
+        <Bottom />
+      </div>
     </div>
-  )
+  );
 }
 
-export default Automobile
+export default Automobile;
 
 function RideServices() {
   return (
@@ -89,7 +99,6 @@ function RideServices() {
               </Button>
             </div>
           </div>
-          
           {/* Uber Card */}
           <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
             <img 
@@ -124,7 +133,6 @@ function Layout() {
         <p className="text-gray-600 text-center mb-6 sm:mb-8 text-sm sm:text-base">
           Rent vehicles for your journey
         </p>
-        
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4 xl:gap-8">
           {products.map((product) => (
             <a 
@@ -157,6 +165,6 @@ function Layout() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 

@@ -246,10 +246,10 @@ export default function BudgetTracker() {
           </div>
 
           {/* Budget Overview Card */}
-          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-2xl p-6 mb-6 shadow-xl">
+          <div className="bg-black rounded-2xl p-6 mb-6 shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <div>
-                <p className="text-blue-100 text-sm mb-1">Total Budget</p>
+                <p className="text-zinc-400 text-sm mb-1">Total Budget</p>
                 {budgetAmount > 0 ? (
                   <p className="text-3xl sm:text-4xl font-bold text-white">
                     {currencySymbol}{budgetAmount.toLocaleString()}
@@ -266,7 +266,7 @@ export default function BudgetTracker() {
               {budgetAmount > 0 && (
                 <button
                   onClick={() => setShowSetBudget(true)}
-                  className="text-blue-100 hover:text-white text-sm transition-colors"
+                  className="text-zinc-300 hover:text-white text-sm transition-colors"
                 >
                   Edit
                 </button>

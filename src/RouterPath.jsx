@@ -13,6 +13,8 @@ import TripPlanner from './components/TripPlanner';
 import SavedTrips from './components/SavedTrips';
 import BudgetTracker from './components/BudgetTracker';
 import BudgetList from './components/BudgetList';
+import Community from './components/Community';
+import Profile from './components/Profile';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -30,6 +32,8 @@ const router = createBrowserRouter(
         <Route path="/saved-trips" element={<SavedTrips/>}/>
         <Route path="/budgets" element={<BudgetList/>}/>
         <Route path="/budget/:tripId" element={<BudgetTracker/>}/>
+        <Route path="/community" element={<Community/>}/>
+        <Route path="/profile" element={<Profile/>}/>
       </Route>
     </>
   ),
@@ -42,7 +46,7 @@ const router = createBrowserRouter(
 );
 
 function RouterPath() {
-  return <RouterProvider router={router} />
+  return <RouterProvider router={router} future={{ v7_startTransition: true }} />
 }
 
 export default RouterPath

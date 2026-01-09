@@ -247,7 +247,9 @@ function Todolist() {
       </div>
 
       {/* Footer */}
-      <Bottom />
+      <div className="hidden sm:block">
+        <Bottom />
+      </div>
     </div>
   )
 }

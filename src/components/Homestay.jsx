@@ -1,64 +1,74 @@
-import React from 'react'
-import Navbar from './Navbar'
-import Bottom from './bottomfoot'
-import logo1 from '../img/home1.jpg'
-import logo2 from '../img/home2.jpg'
-import logo3 from '../img/home3.jpg'
-import logo4 from '../img/home3.jpg'
+import React from 'react';
+import Navbar from './Navbar';
+import Bottom from './bottomfoot';
+import logo1 from '../img/home1.jpg';
+import logo2 from '../img/home2.jpg';
+import logo3 from '../img/home3.jpg';
+import logo4 from '../img/home4.jpg';
 
 
 const products = [
-    {
-      id: 1,
-      name: 'Cozy Mountain Retreat',
-      href: '#',
-      price: '$48/night',
-      imageSrc: logo1,
-      imageAlt: 'home',
-      rating: '4.8',
-    },
-    {
-      id: 2,
-      name: 'Beachside Villa',
-      href: '#',
-      price: '$35/night',
-      imageSrc: logo2,
-      imageAlt: 'home2',
-      rating: '4.6',
-    },
-    {
-      id: 3,
-      name: 'Forest Cabin',
-      href: '#',
-      price: '$89/night',
-      imageSrc: logo3,
-      imageAlt: 'home3',
-      rating: '4.9',
-    },
-    {
-      id: 4,
-      name: 'City Apartment',
-      href: '#',
-      price: '$35/night',
-      imageSrc: logo4,
-      imageAlt: 'home',
-      rating: '4.5',
-    },
-  ]
+  {
+    id: 1,
+    name: 'Cozy Mountain Retreat',
+    href: '#',
+    price: '$48/night',
+    imageSrc: logo1,
+    imageAlt: 'home',
+    rating: '4.8',
+  },
+  {
+    id: 2,
+    name: 'Beachside Villa',
+    href: '#',
+    price: '$35/night',
+    imageSrc: logo2,
+    imageAlt: 'home2',
+    rating: '4.6',
+  },
+  {
+    id: 3,
+    name: 'Forest Cabin',
+    href: '#',
+    price: '$89/night',
+    imageSrc: logo3,
+    imageAlt: 'home3',
+    rating: '4.9',
+  },
+  {
+    id: 4,
+    name: 'City Apartment',
+    href: '#',
+    price: '$35/night',
+    imageSrc: logo4,
+    imageAlt: 'home4',
+    rating: '4.5',
+  },
+];
 
 function Homestay() {
   return (
-    <div className="min-h-screen flex flex-col pb-16 sm:pb-0">
+    <div className="min-h-screen flex flex-col pb-16 sm:pb-0 relative">
       <Navbar />
-      <div className="flex-1">
-        <Layout />
+      {/* Banner overlay */}
+      <div className="absolute top-16 left-0 w-full z-10 flex justify-center">
+        <div className="bg-blue-600/80 text-white px-6 py-2 rounded-b-xl shadow-lg text-center text-base font-semibold">
+          Homestay Services are coming soon and currently inaccessible. Please check back after the next update!
+        </div>
       </div>
-      <Bottom />
+      <div className="flex-1 mt-16 sm:mt-20">
+        <div className="opacity-40 pointer-events-none">
+          <Layout />
+        </div>
+      </div>
+      <div className="hidden sm:block">
+        <Bottom />
+      </div>
     </div>
-  )
+  );
 }
 
-export default Homestay
+export default Homestay;
 
 function Layout() {
   return (
@@ -70,7 +80,6 @@ function Layout() {
         <p className="text-gray-600 text-center mb-6 sm:mb-8 text-sm sm:text-base">
           Discover comfortable homestays near your destination
         </p>
-
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4 xl:gap-8">
           {products.map((product) => (
             <a 
@@ -103,6 +112,6 @@ function Layout() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
