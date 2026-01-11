@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../Firebase';
 import { doc, getDoc, updateDoc, arrayRemove } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import Navbar from './Navbar';
 import Bottom from './bottomfoot';
 import MobileBottomNav from './MobileBottomNav';
@@ -11,35 +12,47 @@ import { MapPinIcon, StarIcon, TrashIcon } from '@heroicons/react/24/outline';
 export default function Shortlist() {
   const [shortlistedHotels, setShortlistedHotels] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!auth.currentUser) {
-      navigate('/login');
-      return;
-    }
-    loadShortlistedHotels();
-  }, [navigate]);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        loadShortlistedHotels(currentUser);
+      } else {
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
-  const loadShortlistedHotels = async () => {
+  const loadShortlistedHotels = async (currentUser) => {
+    if (!currentUser) return;
+    
     try {
-      const userDocRef = doc(db, 'user_shortlists', auth.currentUser.uid);
+      const userDocRef = doc(db, 'user_shortlists', currentUser.uid);
       const userDoc = await getDoc(userDocRef);
       
       if (userDoc.exists()) {
         const data = userDoc.data();
         setShortlistedHotels(data.hotelDetails || []);
+      } else {
+        setShortlistedHotels([]);
       }
     } catch (error) {
       console.error('Error loading shortlisted hotels:', error);
+      setShortlistedHotels([]);
     } finally {
       setLoading(false);
     }
   };
 
   const removeFromShortlist = async (hotelId, hotelData) => {
+    if (!user) return;
+    
     try {
-      const userDocRef = doc(db, 'user_shortlists', auth.currentUser.uid);
+      const userDocRef = doc(db, 'user_shortlists', user.uid);
       
       await updateDoc(userDocRef, {
         hotels: arrayRemove(hotelId),
@@ -101,7 +114,7 @@ export default function Shortlist() {
               </div>
               <button
                 onClick={() => navigate('/hotels')}
-                className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 touch-manipulation"
+                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 touch-manipulation active:scale-95"
               >
                 Browse Hotels
               </button>
