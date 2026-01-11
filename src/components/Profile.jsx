@@ -73,7 +73,16 @@ function Profile() {
       // If viewing own profile, use currentUser info
       if (user && user.uid === userId) {
         googlePhotoURL = user.photoURL || '';
-        displayName = user.displayName || localStorage.getItem('displayName') || user.email?.split('@')[0] || user.email || '';
+        // For email/password users, always prioritize email username
+        if (user.email && !user.displayName) {
+          displayName = user.email.split('@')[0];
+        } else {
+          displayName = user.displayName || localStorage.getItem('displayName') || user.email?.split('@')[0] || user.email || '';
+        }
+        // If still no displayName, try to get it from localStorage with a fallback
+        if (!displayName) {
+          displayName = localStorage.getItem('displayName') || localStorage.getItem('email')?.split('@')[0] || 'Traveler';
+        }
       }
       if (profileSnap.exists()) {
         const data = profileSnap.data();
@@ -89,18 +98,19 @@ function Profile() {
               await updateDoc(profileRef, { displayName: user.displayName });
             }
           } 
-          // For email/password users, use email username if current displayName is userId or empty
-          else if (displayName && (data.displayName === userId || !data.displayName || data.displayName === user.email)) {
-            finalDisplayName = displayName;
-            // Update Firestore if the displayName needs to be updated
-            if (data.displayName !== displayName) {
-              await updateDoc(profileRef, { displayName: displayName });
+          // For email/password users, always use email username as displayName
+          else if (user.email) {
+            const emailUsername = user.email.split('@')[0];
+            finalDisplayName = emailUsername;
+            // Update Firestore if the displayName is not the email username
+            if (data.displayName !== emailUsername) {
+              await updateDoc(profileRef, { displayName: emailUsername });
             }
           }
         }
         
         setProfile({
-          displayName: finalDisplayName || displayName || userId,
+          displayName: finalDisplayName || displayName || localStorage.getItem('displayName') || localStorage.getItem('email')?.split('@')[0] || 'Traveler',
           bio: data.bio || '',
           location: data.location || '',
           website: data.website || '',
@@ -114,8 +124,20 @@ function Profile() {
         });
       } else {
         // Create initial profile
+        let initialDisplayName = displayName;
+        
+        // For email/password users, ensure we have the email username
+        if (user && user.uid === userId && user.email && !user.displayName) {
+          initialDisplayName = user.email.split('@')[0];
+        }
+        
+        // Fallback to localStorage or email from localStorage
+        if (!initialDisplayName) {
+          initialDisplayName = localStorage.getItem('displayName') || localStorage.getItem('email')?.split('@')[0] || 'Traveler';
+        }
+        
         const initialProfile = {
-          displayName: displayName || userId,
+          displayName: initialDisplayName,
           bio: '',
           location: '',
           website: '',

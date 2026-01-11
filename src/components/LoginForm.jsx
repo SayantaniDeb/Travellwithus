@@ -16,6 +16,7 @@ function LoginForm() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [resetEmailSent, setResetEmailSent] = useState(false)
   const [showVerificationMessage, setShowVerificationMessage] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState('')
   const navigate = useNavigate();
 
   // Check for redirect result on component mount
@@ -140,6 +141,31 @@ function LoginForm() {
     }
   }
 
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return
+    
+    setLoading(true)
+    setError('')
+    
+    try {
+      // First sign in the user temporarily to get the user object
+      const result = await signInWithEmailAndPassword(auth, unverifiedEmail, password)
+      
+      // Send verification email
+      await sendEmailVerification(result.user)
+      
+      // Sign out the user
+      await auth.signOut()
+      
+      setError('Verification email sent! Please check your inbox and click the verification link.')
+    } catch (error) {
+      console.error('Resend verification error:', error)
+      setError('Failed to resend verification email. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleEmailAuth = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -196,6 +222,17 @@ function LoginForm() {
     } else {
       try {
         const result = await signInWithEmailAndPassword(auth, email, password)
+        
+        // Check if email is verified
+        if (!result.user.emailVerified) {
+          setUnverifiedEmail(email)
+          setError('Please verify your email before signing in. Check your inbox for the verification link, or click "Resend Verification" below.')
+          setLoading(false)
+          // Sign out the user since they're not verified
+          await auth.signOut()
+          return
+        }
+        
         setValue(result.user.email)
         localStorage.setItem("email", result.user.email)
         localStorage.setItem("displayName", result.user.displayName || result.user.email?.split('@')[0] || 'User')
@@ -300,6 +337,15 @@ function LoginForm() {
                   <div>
                     <p className="font-medium text-xs sm:text-sm">Sign-in Error</p>
                     <p className="mt-1 text-xs sm:text-sm">{error}</p>
+                    {unverifiedEmail && error.includes('verify your email') && (
+                      <button
+                        onClick={handleResendVerification}
+                        disabled={loading}
+                        className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loading ? 'Sending...' : 'Resend Verification'}
+                      </button>
+                    )}
                     {error.includes('browser is not supported') && (
                       <div className="mt-2 sm:mt-3 text-xs">
                         <p className="font-medium mb-1">Try these options:</p>

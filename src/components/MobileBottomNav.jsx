@@ -13,7 +13,8 @@ import {
   CloudIcon,
   ClipboardDocumentListIcon,
   BuildingOfficeIcon,
-  EllipsisHorizontalIcon
+  EllipsisHorizontalIcon,
+  HeartIcon
 } from '@heroicons/react/24/outline';
 
 const mobileNavItems = [
@@ -29,6 +30,7 @@ const moreItems = [
   { name: 'Weather', href: '/Weather', icon: CloudIcon },
   { name: 'Todo List', href: '/Todolist', icon: ClipboardDocumentListIcon },
   { name: 'Hotels', href: '/hotels', icon: BuildingOfficeIcon },
+  { name: 'Shortlist', href: '/shortlist', icon: HeartIcon },
 ];
 
 export default function MobileBottomNav() {
