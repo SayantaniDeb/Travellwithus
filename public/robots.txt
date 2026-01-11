@@ -1,0 +1,14 @@
+# robots.txt for TravelWithUs
+User-agent: *
+Allow: /
+
+# Disallow sensitive or non-public routes
+Disallow: /login
+Disallow: /profile
+Disallow: /plan-trip
+Disallow: /budget/
+Disallow: /budgets
+Disallow: /community
+
+# Sitemap (update with your actual domain if available)
+Sitemap: https://yourdomain.com/sitemap.xml

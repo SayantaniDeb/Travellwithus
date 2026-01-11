@@ -9,44 +9,70 @@ import Bottom from './bottomfoot';
 
 const LLM_PROVIDER = 'groq'; // 'groq', 'gemini', or 'openai'
 
+// Helper function to call AI
+const callAI = async (model, prompt, maxTokens = 8000) => {
+  if (LLM_PROVIDER === 'groq') {
+    const apiKey = import.meta.env.VITE_GROQ_API_KEY;
+    if (!apiKey) throw new Error('Groq API key not configured. Get it free at: https://console.groq.com/keys');
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a travel planner. Return ONLY valid JSON, no markdown, no explanation. Keep responses concise.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.7
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    return data.choices?.[0]?.message?.content;
+  } else if (LLM_PROVIDER === 'openai') {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OpenAI API key not configured');
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a travel planner. Return ONLY valid JSON, no markdown, no explanation. Keep responses concise.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.7
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    return data.choices?.[0]?.message?.content;
+  }
+};
+
 // Currency data with symbols and location mapping
 const CURRENCIES = {
+  INR: { symbol: '₹', name: 'Indian Rupee', countries: ['india'] },
   USD: { symbol: '$', name: 'US Dollar', countries: ['united states', 'usa', 'america'] },
   EUR: { symbol: '€', name: 'Euro', countries: ['germany', 'france', 'italy', 'spain', 'netherlands', 'belgium', 'portugal', 'austria', 'ireland', 'greece', 'finland'] },
-  GBP: { symbol: '£', name: 'British Pound', countries: ['united kingdom', 'uk', 'england', 'scotland', 'wales'] },
-  INR: { symbol: '₹', name: 'Indian Rupee', countries: ['india'] },
-  JPY: { symbol: '¥', name: 'Japanese Yen', countries: ['japan'] },
-  CNY: { symbol: '¥', name: 'Chinese Yuan', countries: ['china'] },
-  AUD: { symbol: 'A$', name: 'Australian Dollar', countries: ['australia'] },
-  CAD: { symbol: 'C$', name: 'Canadian Dollar', countries: ['canada'] },
-  CHF: { symbol: 'Fr', name: 'Swiss Franc', countries: ['switzerland'] },
-  SGD: { symbol: 'S$', name: 'Singapore Dollar', countries: ['singapore'] },
-  AED: { symbol: 'د.إ', name: 'UAE Dirham', countries: ['uae', 'dubai', 'abu dhabi', 'united arab emirates'] },
-  THB: { symbol: '฿', name: 'Thai Baht', countries: ['thailand'] },
-  MYR: { symbol: 'RM', name: 'Malaysian Ringgit', countries: ['malaysia'] },
-  IDR: { symbol: 'Rp', name: 'Indonesian Rupiah', countries: ['indonesia', 'bali'] },
-  KRW: { symbol: '₩', name: 'South Korean Won', countries: ['south korea', 'korea'] },
-  MXN: { symbol: 'Mex$', name: 'Mexican Peso', countries: ['mexico'] },
-  BRL: { symbol: 'R$', name: 'Brazilian Real', countries: ['brazil'] },
-  ZAR: { symbol: 'R', name: 'South African Rand', countries: ['south africa'] },
-  NZD: { symbol: 'NZ$', name: 'New Zealand Dollar', countries: ['new zealand'] },
-  SEK: { symbol: 'kr', name: 'Swedish Krona', countries: ['sweden'] },
-  NOK: { symbol: 'kr', name: 'Norwegian Krone', countries: ['norway'] },
-  DKK: { symbol: 'kr', name: 'Danish Krone', countries: ['denmark'] },
-  RUB: { symbol: '₽', name: 'Russian Ruble', countries: ['russia'] },
-  TRY: { symbol: '₺', name: 'Turkish Lira', countries: ['turkey'] },
-  PHP: { symbol: '₱', name: 'Philippine Peso', countries: ['philippines'] },
-  VND: { symbol: '₫', name: 'Vietnamese Dong', countries: ['vietnam'] },
-  EGP: { symbol: 'E£', name: 'Egyptian Pound', countries: ['egypt'] },
-  PKR: { symbol: 'Rs', name: 'Pakistani Rupee', countries: ['pakistan'] },
-  LKR: { symbol: 'Rs', name: 'Sri Lankan Rupee', countries: ['sri lanka'] },
-  NPR: { symbol: 'Rs', name: 'Nepalese Rupee', countries: ['nepal'] },
-  BDT: { symbol: '৳', name: 'Bangladeshi Taka', countries: ['bangladesh'] },
+
 };
 
 // Get currency based on location name
 const getCurrencyFromLocation = (locationName) => {
-  if (!locationName) return 'USD';
+  if (!locationName) return 'INR';
   const lowerLocation = locationName.toLowerCase();
   
   for (const [code, data] of Object.entries(CURRENCIES)) {
@@ -54,7 +80,7 @@ const getCurrencyFromLocation = (locationName) => {
       return code;
     }
   }
-  return 'USD';
+  return 'INR';
 };
 
 export default function TripPlanner() {
@@ -73,9 +99,49 @@ export default function TripPlanner() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
-  const [currency, setCurrency] = useState('USD');
+  const [currency, setCurrency] = useState('INR');
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
+  const [showSignInPopup, setShowSignInPopup] = useState(false);
+  const [showHotelPopup, setShowHotelPopup] = useState(false);
   const { locationName } = useLocation();
+
+  // Cache key for this trip planner session
+  const cacheKey = `tripPlanner_${destination}`;
+
+  // Load cached state on mount
+  useEffect(() => {
+    const cachedData = sessionStorage.getItem(cacheKey);
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData);
+        setStep(parsed.step || 'dates');
+        setStartDate(parsed.startDate || '');
+        setEndDate(parsed.endDate || '');
+        setSourceLocation(parsed.sourceLocation || '');
+        setBudgetAmount(parsed.budgetAmount || '');
+        setPlan(parsed.plan || null);
+        setSelectedDay(parsed.selectedDay || null);
+        setCurrency(parsed.currency || 'INR');
+      } catch (err) {
+        console.error('Error loading cached trip data:', err);
+      }
+    }
+  }, [cacheKey]);
+
+  // Save state to cache whenever it changes
+  useEffect(() => {
+    const stateToCache = {
+      step,
+      startDate,
+      endDate,
+      sourceLocation,
+      budgetAmount,
+      plan,
+      selectedDay,
+      currency
+    };
+    sessionStorage.setItem(cacheKey, JSON.stringify(stateToCache));
+  }, [step, startDate, endDate, sourceLocation, budgetAmount, plan, selectedDay, currency, cacheKey]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -114,27 +180,7 @@ export default function TripPlanner() {
       return;
     }
 
-    // 2. Place name validation (strict, no normalization, no guessing)
-    // List of valid city names (add more as needed)
-    const VALID_CITIES = [
-      'kolkata', 'delhi', 'mumbai', 'bengaluru', 'bangalore', 'chennai', 'hyderabad', 'pune', 'ahmedabad', 'jaipur',
-      'siliguri', 'guwahati', 'lucknow', 'kanpur', 'nagpur', 'indore', 'bhopal', 'patna', 'ranchi', 'coimbatore',
-      'kochi', 'kozhikode', 'trivandrum', 'varanasi', 'agra', 'amritsar', 'surat', 'noida', 'gurgaon', 'howrah',
-      'new york', 'san francisco', 'london', 'paris', 'berlin', 'tokyo', 'singapore', 'dubai', 'los angeles',
-      'boston', 'seattle', 'sydney', 'melbourne', 'vancouver', 'toronto', 'ottawa', 'washington', 'miami', 'houston',
-      'mountain view', 'zurich', 'geneva', 'amsterdam', 'madrid', 'rome', 'vienna', 'prague', 'budapest',
-      'hong kong', 'shanghai', 'beijing', 'bangkok', 'bali', 'goa', 'cape town', 'johannesburg', 'rio de janeiro', 'sao paulo',
-      'mexico city', 'istanbul', 'moscow', 'helsinki', 'stockholm', 'oslo', 'copenhagen', 'warsaw', 'brussels', 'lisbon',
-      'barcelona', 'athens', 'dubrovnik', 'krakow', 'munich', 'hamburg', 'frankfurt', 'siliguri'
-    ];
-    // Allow case-insensitive substring match (not strict equality)
-    const destTrimmed = destination.trim();
-    if (!destTrimmed || !VALID_CITIES.some(city => city.toLowerCase().includes(destTrimmed.toLowerCase()) || destTrimmed.toLowerCase().includes(city.toLowerCase()))) {
-      setError('Invalid place name');
-      return;
-    }
-
-    // 3. Date validation: start date must not be before today
+    // 2. Date validation: start date must not be before today
     if (!startDate || !endDate) {
       setError('Invalid start date');
       return;
@@ -190,50 +236,29 @@ Return ONLY valid JSON:
       "date": "${startDate}",
       "title": "Day title",
       "summary": "Day summary",
-      "morning": {"activity": "Activity", "description": "Description", "location": "Place", "coordinates": {"lat": 0.0, "lng": 0.0}, "duration": "2h"},
-      "afternoon": {"activity": "Activity", "description": "Description", "location": "Place", "coordinates": {"lat": 0.0, "lng": 0.0}, "duration": "3h"},
-      "evening": {"activity": "Activity", "description": "Description", "location": "Place", "coordinates": {"lat": 0.0, "lng": 0.0}, "duration": "2h"},
+      "morning": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h"},
+      "afternoon": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "3h"},
+      "evening": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h"},
       "meals": {"breakfast": "Food", "lunch": "Food", "dinner": "Food"},
-      "tips": ["Tip"],
-      "estimatedCost": "${currencySymbol}XX"
+      "tips": ["Tip"]
     }
   ],
   "packingList": ["Item1", "Item2"],
   "totalBudget": "${currencySymbol}XXX"
 }
 
-Generate ${numDays} days with real ${destination} locations and accurate GPS coordinates. Keep descriptions brief.`;
+Generate ${numDays} days with real ${destination} locations. Keep descriptions brief.`;
 
     try {
-      let response;
       let text;
 
       if (LLM_PROVIDER === 'groq') {
-        const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-        if (!apiKey) throw new Error('Groq API key not configured. Get it free at: https://console.groq.com/keys');
+        // Planning Agent: Generate basic plan without costs
+        text = await callAI('openai/gpt-oss-20b', prompt, 6000);
 
-        response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              { role: 'system', content: 'You are a travel planner. Return ONLY valid JSON, no markdown, no explanation. Keep responses concise.' },
-              { role: 'user', content: prompt }
-            ],
-            max_tokens: 8000,
-            temperature: 0.7
-          })
-        });
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-        text = data.choices?.[0]?.message?.content;
-
-      } else if (LLM_PROVIDER === 'gemini') {
+      } else if (LLM_PROVIDER === 'openai') {
+        // Planning Agent: Generate basic plan without costs
+        text = await callAI('gpt-4o', prompt, 6000);
         const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
         if (!apiKey) throw new Error('Gemini API key not configured');
 
@@ -265,21 +290,81 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
         try {
           planData = JSON.parse(cleanText);
         } catch (parseErr) {
+          console.error('Initial JSON parse failed:', parseErr.message);
           // If JSON is truncated, try to fix common issues
           let fixedText = cleanText;
+          
+          // Count braces and brackets
           const openBraces = (cleanText.match(/{/g) || []).length;
           const closeBraces = (cleanText.match(/}/g) || []).length;
           const openBrackets = (cleanText.match(/\[/g) || []).length;
           const closeBrackets = (cleanText.match(/\]/g) || []).length;
+          
+          // Add missing closing brackets and braces
           for (let i = 0; i < openBrackets - closeBrackets; i++) fixedText += ']';
           for (let i = 0; i < openBraces - closeBraces; i++) fixedText += '}';
-          planData = JSON.parse(fixedText);
+          
+          try {
+            planData = JSON.parse(fixedText);
+          } catch (secondErr) {
+            console.error('Second JSON parse failed:', secondErr.message);
+            // Try a more aggressive fix - find the last valid JSON structure
+            try {
+              // Look for the last complete object in the response
+              const lastBraceIndex = cleanText.lastIndexOf('}');
+              if (lastBraceIndex > 0) {
+                const truncatedText = cleanText.substring(0, lastBraceIndex + 1);
+                planData = JSON.parse(truncatedText);
+              } else {
+                throw new Error('Unable to parse JSON response from AI');
+              }
+            } catch (thirdErr) {
+              console.error('Third JSON parse failed:', thirdErr.message);
+              throw new Error('AI returned invalid JSON. Please try again.');
+            }
+          }
         }
         planData.startDate = startDate;
         planData.endDate = endDate;
         planData.source = sourceLocation;
         planData.currency = currency;
         planData.currencySymbol = currencySymbol;
+
+        // Cost Agent: Add detailed cost breakdowns for each day
+        if (Array.isArray(planData.days)) {
+          for (let i = 0; i < planData.days.length; i++) {
+            const day = planData.days[i];
+            const costPrompt = `For this day in ${destination}: ${day.title} - ${day.summary}
+
+Morning: ${day.morning.activity} at ${day.morning.location}
+Afternoon: ${day.afternoon.activity} at ${day.afternoon.location}
+Evening: ${day.evening.activity} at ${day.evening.location}
+
+Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) for a typical traveler in ${destination}. Use current average prices. Include transport, food, and activity costs. Examples for ${destination}: food ₹500-1000/meal, transport ₹200-500/activity, activities ₹500-2000. Return ONLY JSON:
+{
+  "morningCost": "${currencySymbol}XXX (transport: ${currencySymbol}X, food: ${currencySymbol}X, activity: ${currencySymbol}X)",
+  "afternoonCost": "${currencySymbol}XXX (transport: ${currencySymbol}X, food: ${currencySymbol}X, activity: ${currencySymbol}X)",
+  "eveningCost": "${currencySymbol}XXX (transport: ${currencySymbol}X, food: ${currencySymbol}X, activity: ${currencySymbol}X)",
+  "totalDayCost": "${currencySymbol}XXX"
+}`;
+
+            try {
+              const costText = await callAI('openai/gpt-oss-20b', costPrompt, 2000);
+              const costData = JSON.parse(costText);
+              if (day.morning) day.morning.estimatedCost = costData.morningCost;
+              if (day.afternoon) day.afternoon.estimatedCost = costData.afternoonCost;
+              if (day.evening) day.evening.estimatedCost = costData.eveningCost;
+              day.estimatedCost = costData.totalDayCost;
+            } catch (err) {
+              console.error('Error getting costs for day', i+1, err);
+              // Fallback costs
+              if (day.morning) day.morning.estimatedCost = `${currencySymbol}100 (est.)`;
+              if (day.afternoon) day.afternoon.estimatedCost = `${currencySymbol}150 (est.)`;
+              if (day.evening) day.evening.estimatedCost = `${currencySymbol}200 (est.)`;
+              day.estimatedCost = `${currencySymbol}450 (est.)`;
+            }
+          }
+        }
 
         // --- STRICT COST VS BUDGET VALIDATION ---
         const enteredBudget = budgetAmount ? parseFloat(budgetAmount) : 0;
@@ -336,8 +421,7 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
 
   const saveTrip = async () => {
     if (!user) {
-      alert('Please login to save your trip');
-      return;
+      return null;
     }
 
     setSaving(true);
@@ -352,11 +436,12 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
         updatedAt: serverTimestamp()
       });
       alert('Trip saved successfully! 🎉');
-      // Navigate to budget tracker for this trip
-      navigate(`/budget/${docRef.id}`);
+      // Stay on the current page
+      return docRef;
     } catch (err) {
       console.error('Error saving trip:', err);
       alert('Failed to save trip. Please try again.');
+      return null;
     } finally {
       setSaving(false);
     }
@@ -395,7 +480,11 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
           <div className="max-w-md mx-auto">
             {/* Back button */}
             <button 
-              onClick={() => navigate('/home')}
+              onClick={() => {
+                // Clear cache when going back to home
+                sessionStorage.removeItem(cacheKey);
+                navigate('/home');
+              }}
               className="inline-flex items-center gap-2 text-zinc-600 hover:text-zinc-900 text-sm mb-6 transition-all hover:-translate-x-0.5"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -584,22 +673,70 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <button
-                    onClick={() => navigate('/home')}
-                    className="px-4 py-2.5 text-white/80 hover:text-white hover:bg-white/10 rounded-xl text-sm font-medium transition-all"
+                    onClick={() => {
+                      if (!user) {
+                        setShowSignInPopup(true);
+                        return;
+                      }
+                      saveTrip();
+                    }}
+                    disabled={saving}
+                    className="px-4 py-2.5 sm:px-5 sm:py-2.5 bg-white text-blue-700 rounded-xl text-sm font-medium hover:bg-blue-50 disabled:bg-white/50 disabled:text-blue-400 transition-all shadow-lg active:scale-[0.98] w-full sm:w-auto"
                   >
-                    ← Back
+                    {saving ? 'Saving...' : 'Save Trip'}
                   </button>
                   <button
-                    onClick={saveTrip}
-                    disabled={saving}
-                    className="px-5 py-2.5 bg-white text-blue-700 rounded-xl text-sm font-medium hover:bg-blue-50 disabled:bg-white/50 disabled:text-blue-400 transition-all shadow-lg active:scale-[0.98]"
+                    onClick={async () => {
+                      if (!user) {
+                        setShowSignInPopup(true);
+                        return;
+                      }
+                      
+                      // Save trip first
+                      const tripRef = await saveTrip();
+                      if (tripRef) {
+                        // Then navigate to budget tracking
+                        navigate('/budget/' + tripRef.id, {
+                          state: {
+                            tripData: plan,
+                            currency,
+                            budgetAmount: budgetAmount ? parseFloat(budgetAmount) : 0,
+                            fromPage: 'trip-planner'
+                          }
+                        });
+                      }
+                    }}
+                    className="px-4 py-2.5 sm:px-5 sm:py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-all shadow-lg active:scale-[0.98] w-full sm:w-auto"
                   >
-                    {saving ? 'Saving...' : 'Save & Track Budget 💰'}
+                    Track Budget
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!user) {
+                        setShowHotelPopup(true);
+                        return;
+                      }
+                      navigate('/hotels', {
+                        state: {
+                          tripData: plan,
+                          fromPage: 'trip-planner'
+                        }
+                      });
+                    }}
+                    className="px-4 py-2.5 sm:px-5 sm:py-2.5 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-all shadow-lg active:scale-[0.98] w-full sm:w-auto"
+                  >
+                    Search Hotel
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Ticket integration tip */}
+            <div className="mb-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 rounded-xl text-sm flex items-center gap-2">
+              <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+              <span>Travel journey ticket and hotel stay prices not included.</span>
             </div>
 
             {/* Travel Info Card */}
@@ -691,6 +828,110 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
             )}
           </div>
         </div>
+
+        {/* Sign In Popup Modal */}
+        {showSignInPopup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="relative w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-lg">
+              {/* Close button */}
+              <button
+                onClick={() => setShowSignInPopup(false)}
+                className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              <div className="flex flex-col items-center space-y-4">
+                {/* Image */}
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+
+                <div className="text-center">
+                  <h2 className="text-lg font-semibold text-zinc-900">Sign In Required</h2>
+                  <p className="text-sm text-zinc-600 mt-2">
+                    To track your budget and save your trip plan, please sign in to your account.
+                  </p>
+                </div>
+
+                <div className="flex flex-col w-full space-y-2">
+                  <button
+                    onClick={() => navigate('/login')}
+                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => setShowSignInPopup(false)}
+                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+                  >
+                    Continue as Guest
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Hotel Search Popup Modal */}
+        {showHotelPopup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="relative w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-lg">
+              {/* Close button */}
+              <button
+                onClick={() => setShowHotelPopup(false)}
+                className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              <div className="flex flex-col items-center space-y-4">
+                {/* Image */}
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+
+                <div className="text-center">
+                  <h2 className="text-lg font-semibold text-zinc-900">Save Your Trip?</h2>
+                  <p className="text-sm text-zinc-600 mt-2">
+                    Going forward without signing in won't store your trip. Sign in to continue, or go without saving.
+                  </p>
+                </div>
+
+                <div className="flex flex-col w-full space-y-2">
+                  <button
+                    onClick={() => navigate('/login')}
+                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full"
+                  >
+                    Sign In & Save Trip
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowHotelPopup(false);
+                      navigate('/hotels', {
+                        state: {
+                          tripData: plan,
+                          fromPage: 'trip-planner'
+                        }
+                      });
+                    }}
+                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
+                  >
+                    Continue Without Saving
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -741,25 +982,11 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                 </div>
                 <h5 className="font-medium text-zinc-800 mb-1">{selectedDay.morning?.activity}</h5>
                 <p className="text-sm text-zinc-500 mb-2">{selectedDay.morning?.description}</p>
-                {selectedDay.morning?.coordinates ? (
-                  <button
-                    onClick={() => navigate(`/Journeypath?lat=${selectedDay.morning.coordinates.lat}&lng=${selectedDay.morning.coordinates.lng}&name=${encodeURIComponent(selectedDay.morning.location)}`)}
-                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded-lg transition-all"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {selectedDay.morning.location} →
-                  </button>
-                ) : (
-                  <p className="text-xs text-zinc-400 flex items-center gap-1">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {selectedDay.morning?.location}
-                  </p>
+                <p className="text-xs text-zinc-400 flex items-center gap-1">
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDay.morning?.location)}`} target="_blank" className="text-blue-600 hover:underline">{selectedDay.morning?.location}</a>
+                </p>
+                {selectedDay.morning?.estimatedCost && (
+                  <p className="text-xs text-emerald-600 mt-1">{selectedDay.morning.estimatedCost}</p>
                 )}
               </div>
 
@@ -783,25 +1010,11 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                 </div>
                 <h5 className="font-medium text-zinc-800 mb-1">{selectedDay.afternoon?.activity}</h5>
                 <p className="text-sm text-zinc-500 mb-2">{selectedDay.afternoon?.description}</p>
-                {selectedDay.afternoon?.coordinates ? (
-                  <button
-                    onClick={() => navigate(`/Journeypath?lat=${selectedDay.afternoon.coordinates.lat}&lng=${selectedDay.afternoon.coordinates.lng}&name=${encodeURIComponent(selectedDay.afternoon.location)}`)}
-                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded-lg transition-all"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {selectedDay.afternoon.location} →
-                  </button>
-                ) : (
-                  <p className="text-xs text-zinc-400 flex items-center gap-1">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {selectedDay.afternoon?.location}
-                  </p>
+                <p className="text-xs text-zinc-400 flex items-center gap-1">
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDay.afternoon?.location)}`} target="_blank" className="text-blue-600 hover:underline">{selectedDay.afternoon?.location}</a>
+                </p>
+                {selectedDay.afternoon?.estimatedCost && (
+                  <p className="text-xs text-emerald-600 mt-1">{selectedDay.afternoon.estimatedCost}</p>
                 )}
               </div>
 
@@ -825,25 +1038,11 @@ Generate ${numDays} days with real ${destination} locations and accurate GPS coo
                 </div>
                 <h5 className="font-medium text-zinc-800 mb-1">{selectedDay.evening?.activity}</h5>
                 <p className="text-sm text-zinc-500 mb-2">{selectedDay.evening?.description}</p>
-                {selectedDay.evening?.coordinates ? (
-                  <button
-                    onClick={() => navigate(`/Journeypath?lat=${selectedDay.evening.coordinates.lat}&lng=${selectedDay.evening.coordinates.lng}&name=${encodeURIComponent(selectedDay.evening.location)}`)}
-                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded-lg transition-all"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {selectedDay.evening.location} →
-                  </button>
-                ) : (
-                  <p className="text-xs text-zinc-400 flex items-center gap-1">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {selectedDay.evening?.location}
-                  </p>
+                <p className="text-xs text-zinc-400 flex items-center gap-1">
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDay.evening?.location)}`} target="_blank" className="text-blue-600 hover:underline">{selectedDay.evening?.location}</a>
+                </p>
+                {selectedDay.evening?.estimatedCost && (
+                  <p className="text-xs text-emerald-600 mt-1">{selectedDay.evening.estimatedCost}</p>
                 )}
               </div>
 

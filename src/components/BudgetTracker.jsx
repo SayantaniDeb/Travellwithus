@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { auth, db } from '../Firebase';
 import { doc, getDoc, updateDoc, collection, addDoc, query, orderBy, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -34,6 +34,7 @@ export default function BudgetTracker() {
   const MIN_TRIP_COST = 100; // Change as needed or make dynamic
   const { tripId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [user, setUser] = useState(null);
   const [trip, setTrip] = useState(null);
@@ -62,7 +63,23 @@ export default function BudgetTracker() {
 
   // Fetch trip data
   useEffect(() => {
-    if (!user || !tripId) return;
+    if (!user) return;
+
+    // If trip data is passed via navigation state (from trip planner)
+    if (location.state?.tripData) {
+      const tripData = location.state.tripData;
+      setTrip(tripData);
+      setTotalBudgetInput(location.state.budgetAmount?.toString() || '');
+      setSelectedCurrency(location.state.currency || 'USD');
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise, fetch from Firestore using tripId
+    if (!tripId) {
+      setLoading(false);
+      return;
+    }
 
     const fetchTrip = async () => {
       try {
@@ -80,9 +97,9 @@ export default function BudgetTracker() {
     };
 
     fetchTrip();
-  }, [user, tripId]);
+  }, [user, tripId, location.state]);
 
-  // Listen to expenses
+  // Listen to expenses (only if trip is saved in Firestore)
   useEffect(() => {
     if (!user || !tripId) return;
 
@@ -107,7 +124,31 @@ export default function BudgetTracker() {
     }
 
     try {
-      const expensesRef = collection(db, 'users', user.uid, 'trips', tripId, 'expenses');
+      let currentTripId = tripId;
+
+      // If trip is not saved yet (coming from trip planner), save it first
+      if (!currentTripId && trip && user) {
+        const tripData = {
+          ...trip,
+          budgetAmount: parseFloat(totalBudget) || 0,
+          currency: selectedCurrency,
+          createdAt: new Date(),
+          userId: user.uid
+        };
+
+        const docRef = await addDoc(collection(db, 'users', user.uid, 'trips'), tripData);
+        currentTripId = docRef.id;
+        
+        // Update the URL to include the trip ID
+        navigate(`/budget/${currentTripId}`, { replace: true });
+      }
+
+      if (!currentTripId) {
+        alert('Unable to save trip. Please try again.');
+        return;
+      }
+
+      const expensesRef = collection(db, 'users', user.uid, 'trips', currentTripId, 'expenses');
       await addDoc(expensesRef, {
         amount: parseFloat(expenseAmount),
         description: expenseDescription || CATEGORIES.find(c => c.id === expenseCategory)?.name,
@@ -304,11 +345,11 @@ export default function BudgetTracker() {
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white/20 rounded-xl p-4">
-                    <p className="text-zinc-300 text-xs mb-1">Spent</p>
+                    <p className="text-zinc-200 text-xs mb-1">Spent</p>
                     <p className="text-xl font-bold text-white">{currencySymbol}{totalSpent.toLocaleString()}</p>
                   </div>
                   <div className={`rounded-xl p-4 ${remaining >= 0 ? 'bg-white/20' : 'bg-red-500/30'}`}>
-                    <p className="text-zinc-300 text-xs mb-1">{remaining >= 0 ? 'Remaining' : 'Over Budget'}</p>
+                    <p className="text-zinc-200 text-xs mb-1">{remaining >= 0 ? 'Remaining' : 'Over Budget'}</p>
                     <p className={`text-xl font-bold ${remaining >= 0 ? 'text-white' : 'text-red-300'}`}>
                       {remaining >= 0 ? '' : '-'}{currencySymbol}{Math.abs(remaining).toLocaleString()}
                     </p>

@@ -8,12 +8,10 @@ import {
   HomeIcon,
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
-  MapPinIcon,
   UserIcon,
   WalletIcon,
   CloudIcon,
   ClipboardDocumentListIcon,
-  TruckIcon,
   BuildingOfficeIcon,
   EllipsisHorizontalIcon
 } from '@heroicons/react/24/outline';
@@ -28,12 +26,9 @@ const mobileNavItems = [
 ];
 
 const moreItems = [
-  
   { name: 'Weather', href: '/Weather', icon: CloudIcon },
-  { name: 'Routes', href: '/Journeypath', icon: MapPinIcon },
   { name: 'Todo List', href: '/Todolist', icon: ClipboardDocumentListIcon },
-  { name: 'Cars', href: '/Automobile', icon: TruckIcon },
-  { name: 'Stays', href: '/Homestay', icon: BuildingOfficeIcon },
+  { name: 'Hotels', href: '/hotels', icon: BuildingOfficeIcon },
 ];
 
 export default function MobileBottomNav() {

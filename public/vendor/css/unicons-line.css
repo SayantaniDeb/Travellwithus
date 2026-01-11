@@ -1,0 +1,32 @@
+/* Unicons Line CSS v4.0.0 (local copy)
+   Source: https://unicons.iconscout.com/release/v4.0.0/css/line.css
+   NOTE: Font-face URLs must be updated to point to local fonts if used. */
+
+@font-face {
+  font-family: 'unicons-line';
+  src: url('../fonts/line/unicons-0.eot');
+  src: url('../fonts/line/unicons-0.eot#iefix') format('embedded-opentype'),
+       url('../fonts/line/unicons-0.woff2') format('woff2'),
+       url('../fonts/line/unicons-0.woff') format('woff'),
+       url('../fonts/line/unicons-0.ttf') format('truetype'),
+       url('../fonts/line/unicons-0.svg#unicons') format('svg');
+  font-weight: normal;
+  font-style: normal;
+  unicode-range: U+E800-E83B;
+}
+/* ... (truncated for brevity, full CSS should be pasted here) ... */
+[class^="uil-"]:before,
+[class*=" uil-"]:before {
+  font-family: "unicons-line";
+  font-style: normal;
+  font-weight: normal;
+  speak: none;
+  display: inline-block;
+  text-decoration: inherit;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+/* ... (rest of the CSS) ... */

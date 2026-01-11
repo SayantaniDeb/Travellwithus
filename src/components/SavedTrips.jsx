@@ -220,12 +220,54 @@ export default function SavedTrips() {
   // Day Detail with Edit Mode
   if (selectedDay) {
     const day = editMode ? editedDay : selectedDay;
+    const trip = trips.find(t => t.days?.some(d => d.day === day.day));
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
         <Navbar />
         <div className="pt-20 sm:pt-24 pb-24 px-4">
           <div className="max-w-2xl mx-auto">
+            {/* Getting There Section */}
+            {trip?.travelInfo && day.day === 1 && (
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-lg p-5 mb-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-zinc-900">Getting There</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Route</p>
+                      <p className="text-sm font-medium text-zinc-900">{trip.travelInfo.from} → {trip.travelInfo.to}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Mode</p>
+                      <p className="text-sm font-medium text-zinc-900">{trip.travelInfo.recommendedMode}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Ticket Cost</p>
+                      <p className="text-sm font-semibold text-emerald-700">{trip.travelInfo.estimatedTicketCost}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Duration</p>
+                      <p className="text-sm font-medium text-zinc-900">{trip.travelInfo.travelDuration}</p>
+                    </div>
+                  </div>
+                </div>
+                {trip.travelInfo.tips && (
+                  <div className="mt-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded-r-xl">
+                    <p className="text-xs text-blue-700">{trip.travelInfo.tips}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Header */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl shadow-zinc-200/50 p-5 mb-6">
               <div className="flex items-center justify-between">
@@ -310,13 +352,16 @@ export default function SavedTrips() {
                   <>
                     <h5 className="font-medium text-zinc-800 mb-1">{day.morning?.activity}</h5>
                     <p className="text-sm text-zinc-500 mb-2">{day.morning?.description}</p>
-                    <p className="text-xs text-zinc-400 flex items-center gap-1">
+                    <p className="text-xs text-zinc-400 flex items-center gap-1 mb-2">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                       {day.morning?.location}
                     </p>
+                    {day.morning?.estimatedCost && (
+                      <p className="text-xs text-emerald-600 font-medium">{day.morning.estimatedCost}</p>
+                    )}
                   </>
                 )}
               </div>
@@ -382,13 +427,16 @@ export default function SavedTrips() {
                   <>
                     <h5 className="font-medium text-zinc-800 mb-1">{day.afternoon?.activity}</h5>
                     <p className="text-sm text-zinc-500 mb-2">{day.afternoon?.description}</p>
-                    <p className="text-xs text-zinc-400 flex items-center gap-1">
+                    <p className="text-xs text-zinc-400 flex items-center gap-1 mb-2">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                       {day.afternoon?.location}
                     </p>
+                    {day.afternoon?.estimatedCost && (
+                      <p className="text-xs text-emerald-600 font-medium">{day.afternoon.estimatedCost}</p>
+                    )}
                   </>
                 )}
               </div>
@@ -454,17 +502,32 @@ export default function SavedTrips() {
                   <>
                     <h5 className="font-medium text-zinc-800 mb-1">{day.evening?.activity}</h5>
                     <p className="text-sm text-zinc-500 mb-2">{day.evening?.description}</p>
-                    <p className="text-xs text-zinc-400 flex items-center gap-1">
+                    <p className="text-xs text-zinc-400 flex items-center gap-1 mb-2">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                       {day.evening?.location}
                     </p>
+                    {day.evening?.estimatedCost && (
+                      <p className="text-xs text-emerald-600 font-medium">{day.evening.estimatedCost}</p>
+                    )}
                   </>
                 )}
               </div>
 
+              {/* Cost breakdown */}
+              {day.costs && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-center shadow-lg mb-4">
+                  <span className="block mb-2 font-medium">Cost Breakdown for Day {day.day}</span>
+                  <div className="flex flex-wrap justify-center gap-4 text-sm">
+                    <div>Food: <span className="font-semibold text-emerald-700">{day.costs.food || '-'}</span></div>
+                    <div>Hotel: <span className="font-semibold text-blue-700">{day.costs.hotel || '-'}</span></div>
+                    <div>Transport: <span className="font-semibold text-amber-700">{day.costs.transport || '-'}</span></div>
+                    <div>Subtotal: <span className="font-semibold text-zinc-900">{day.costs.subtotal || '-'}</span></div>
+                  </div>
+                </div>
+              )}
               {/* Cost */}
               <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-5 text-center shadow-xl shadow-emerald-500/30">
                 <span className="text-xs text-emerald-100 font-medium uppercase tracking-wide">Estimated Cost for Day {day.day}</span>
@@ -564,20 +627,40 @@ export default function SavedTrips() {
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
                     <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg text-amber-600 shadow-sm">☀</span>
                     <span className="truncate">{day.morning?.activity}</span>
+                    {day.morning?.coordinates && (
+                      <span className="ml-2 text-[10px] text-blue-500">[{day.morning.coordinates.lat}, {day.morning.coordinates.lng}]</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
                     <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-blue-600 shadow-sm">◐</span>
                     <span className="truncate">{day.afternoon?.activity}</span>
+                    {day.afternoon?.coordinates && (
+                      <span className="ml-2 text-[10px] text-blue-500">[{day.afternoon.coordinates.lat}, {day.afternoon.coordinates.lng}]</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
                     <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg text-indigo-600 shadow-sm">☾</span>
                     <span className="truncate">{day.evening?.activity}</span>
+                    {day.evening?.coordinates && (
+                      <span className="ml-2 text-[10px] text-blue-500">[{day.evening.coordinates.lat}, {day.evening.coordinates.lng}]</span>
+                    )}
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-zinc-100 flex justify-between items-center">
-                  <span className="text-xs text-zinc-400">Est. cost</span>
-                  <span className="text-sm font-semibold">{day.estimatedCost}</span>
-                </div>
+                {/* Daily cost breakdown */}
+                {day.costs && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-600">
+                    <div>Food: <span className="font-semibold text-emerald-700">{day.costs.food || '-'}</span></div>
+                    <div>Hotel: <span className="font-semibold text-blue-700">{day.costs.hotel || '-'}</span></div>
+                    <div>Transport: <span className="font-semibold text-amber-700">{day.costs.transport || '-'}</span></div>
+                    <div>Subtotal: <span className="font-semibold text-zinc-900">{day.costs.subtotal || '-'}</span></div>
+                  </div>
+                )}
+                {day.estimatedCost && (
+                  <div className="mt-3 pt-3 border-t border-zinc-100 flex justify-between items-center">
+                    <span className="text-xs text-zinc-400">Est. cost</span>
+                    <span className="text-sm font-semibold text-emerald-700">{day.estimatedCost}</span>
+                  </div>
+                )}
                 <div className="mt-2 text-center">
                   <span className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity">
                     Click to view/edit
