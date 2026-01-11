@@ -8,7 +8,7 @@ const LocationPermissionModal = () => {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 transform animate-slideUp">
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-sm w-full p-6 transform animate-slideUp">
         {/* Icon */}
         <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
           <svg 

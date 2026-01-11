@@ -446,7 +446,7 @@ export default function BudgetTracker() {
       {/* Add Expense Modal */}
       {showAddExpense && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[101] flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-xs sm:max-w-sm shadow-2xl border border-zinc-200 max-h-[32rem] flex flex-col justify-start text-xs overflow-hidden">
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl w-full max-w-xs sm:max-w-sm shadow-2xl border border-zinc-200 max-h-[32rem] flex flex-col justify-start text-xs overflow-hidden">
             <div className="p-5 border-b border-zinc-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-zinc-900">Add Expense</h3>
               <button
@@ -531,7 +531,7 @@ export default function BudgetTracker() {
       {/* Set Budget Modal */}
       {showSetBudget && (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[101] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl border border-zinc-200">
+          <div className="bg-white/95 backdrop-blur-md rounded-2xl w-full max-w-sm shadow-2xl border border-zinc-200">
             <div className="p-5 border-b border-zinc-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-zinc-900">Set Budget</h3>
               <button

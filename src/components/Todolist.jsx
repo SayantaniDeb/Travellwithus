@@ -2,7 +2,6 @@
 import React, { useRef, useState, useEffect } from 'react'
 import Navbar from './Navbar'
 import { BsTrash } from "react-icons/bs";
-import { AiOutlinePlus } from "react-icons/ai";
 import logo4 from '../img/5.gif'
 import Bottom from './bottomfoot';
 import { db, auth } from '../Firebase';
@@ -51,25 +50,51 @@ function Input(props) {
   };
 
   return (
-    <div className='p-2 sm:p-3 md:p-4 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-around items-center'>
-      <input 
-        type="text" 
-        placeholder='Whats on your list?' 
-        className='p-2 sm:p-3 focus:outline-none w-full sm:w-[85%] md:w-[90%] border border-slate-400 rounded-lg text-sm sm:text-base' 
-        ref={inputBox}
-        onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
-        disabled={loading}
-      />
-      <div 
-        className={`cursor-pointer w-10 h-10 sm:w-12 sm:h-12 md:w-[50px] md:h-[50px] bg-[#111827] text-white text-xl sm:text-2xl md:text-3xl rounded-full flex justify-center items-center hover:bg-gray-700 transition-colors duration-200 ${loading ? 'opacity-50' : ''}`}
-        onClick={handleAdd}
-      >
-        {loading ? (
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-        ) : (
-          <AiOutlinePlus />
-        )}
-      </div>
+    <div className='p-2 sm:p-3 md:p-4'>
+      <form onSubmit={(e) => { e.preventDefault(); handleAdd(); }} className="max-w-md mx-auto">
+        <label htmlFor="todo-input" className="mb-2 text-sm font-medium text-gray-900 sr-only">
+          Add Todo
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+            <svg 
+              aria-hidden="true" 
+              className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth="2" 
+                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+          </div>
+          <input 
+            type="text" 
+            id="todo-input"
+            placeholder='Whats on your list?' 
+            className='block w-full p-3 sm:p-4 pl-9 sm:pl-10 pr-20 sm:pr-24 text-sm sm:text-base text-gray-900 border border-gray-300 rounded-lg bg-white/90 backdrop-blur-sm focus:ring-zinc-500 focus:border-zinc-500 focus:outline-none shadow-lg' 
+            ref={inputBox}
+            onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
+            disabled={loading}
+          />
+          <button 
+            type="submit"
+            disabled={loading}
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black hover:bg-zinc-800 text-white font-medium rounded-lg text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              'Add'
+            )}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

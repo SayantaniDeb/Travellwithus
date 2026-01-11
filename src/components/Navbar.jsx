@@ -78,11 +78,11 @@ function LocationBadge() {
           <>
             {/* Backdrop */}
             <div 
-              className="fixed inset-0 z-40" 
+              className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" 
               onClick={() => setShowPopup(false)}
             />
             {/* Popup */}
-            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+            <div className="absolute right-0 top-full mt-2 w-48 bg-white/95 backdrop-blur-md rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
               <div className="p-3 border-b border-gray-100">
                 <p className="text-xs text-gray-500">Current Location</p>
                 <p className="text-sm font-medium text-gray-800 truncate">{locationName}</p>
@@ -217,8 +217,8 @@ export default function Navbar() {
         </nav>
         {/* Sign In popup */}
         {showSignInPopup && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-xs w-full text-center">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl p-6 max-w-xs w-full text-center">
               <h2 className="text-lg font-semibold mb-3 text-zinc-800">Sign In</h2>
               <p className="text-sm text-gray-600 mb-4">Access your travel plans and preferences</p>
               <div className="flex gap-4 justify-center mt-4">
@@ -334,8 +334,8 @@ export default function Navbar() {
       </div>
       {/* Logout confirmation popup */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-xs w-full text-center">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl p-6 max-w-xs w-full text-center">
             <h2 className="text-lg font-semibold mb-3 text-zinc-800">Are you sure?</h2>
             <div className="flex gap-4 justify-center mt-4">
               <button

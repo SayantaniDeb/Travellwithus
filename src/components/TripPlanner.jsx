@@ -103,6 +103,7 @@ export default function TripPlanner() {
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const [showSignInPopup, setShowSignInPopup] = useState(false);
   const [showHotelPopup, setShowHotelPopup] = useState(false);
+  const [tripSaved, setTripSaved] = useState(false);
   const { locationName } = useLocation();
 
   // Cache key for this trip planner session
@@ -436,6 +437,7 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
         updatedAt: serverTimestamp()
       });
       alert('Trip saved successfully! 🎉');
+      setTripSaved(true); // Mark trip as saved
       // Stay on the current page
       return docRef;
     } catch (err) {
@@ -718,6 +720,10 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                         setShowHotelPopup(true);
                         return;
                       }
+                      if (!tripSaved) {
+                        alert('Please save your trip first before searching for hotels.');
+                        return;
+                      }
                       navigate('/hotels', {
                         state: {
                           tripData: plan,
@@ -832,7 +838,7 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
         {/* Sign In Popup Modal */}
         {showSignInPopup && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="relative w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-lg">
+            <div className="relative w-full max-w-md rounded-lg border border-zinc-200 bg-white/95 backdrop-blur-md p-6 shadow-lg">
               {/* Close button */}
               <button
                 onClick={() => setShowSignInPopup(false)}
@@ -880,7 +886,7 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
         {/* Hotel Search Popup Modal */}
         {showHotelPopup && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="relative w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-lg">
+            <div className="relative w-full max-w-md rounded-lg border border-zinc-200 bg-white/95 backdrop-blur-md p-6 shadow-lg">
               {/* Close button */}
               <button
                 onClick={() => setShowHotelPopup(false)}
@@ -900,9 +906,9 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                 </div>
 
                 <div className="text-center">
-                  <h2 className="text-lg font-semibold text-zinc-900">Save Your Trip?</h2>
+                  <h2 className="text-lg font-semibold text-zinc-900">Save Your Trip First</h2>
                   <p className="text-sm text-zinc-600 mt-2">
-                    Going forward without signing in won't store your trip. Sign in to continue, or go without saving.
+                    You need to save your trip before you can search for hotels. Please sign in and save your trip to continue.
                   </p>
                 </div>
 
@@ -914,18 +920,22 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                     Sign In & Save Trip
                   </button>
                   <button
-                    onClick={() => {
-                      setShowHotelPopup(false);
-                      navigate('/hotels', {
-                        state: {
-                          tripData: plan,
-                          fromPage: 'trip-planner'
-                        }
-                      });
+                    onClick={async () => {
+                      // Save trip first, then navigate to hotels
+                      const tripRef = await saveTrip();
+                      if (tripRef) {
+                        setShowHotelPopup(false);
+                        navigate('/hotels', {
+                          state: {
+                            tripData: plan,
+                            fromPage: 'trip-planner'
+                          }
+                        });
+                      }
                     }}
                     className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full"
                   >
-                    Continue Without Saving
+                    Save Trip & Search Hotels
                   </button>
                 </div>
               </div>

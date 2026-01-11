@@ -984,19 +984,13 @@ Return ONLY valid JSON:
         <div className="max-w-2xl mx-auto">
           {/* Back button */}
           <button 
-            onClick={() => {
-              if (locationState.state?.fromPage === 'trip-planner') {
-                navigate(-1); // Go back to trip planner calendar view
-              } else {
-                navigate('/home');
-              }
-            }}
+            onClick={() => navigate('/saved-trips')}
             className="inline-flex items-center gap-2 text-zinc-600 hover:text-zinc-900 text-sm mb-6 transition-all hover:-translate-x-0.5"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Back to Calendar
+            Back to Saved Trips
           </button>
 
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl p-6 mb-6">

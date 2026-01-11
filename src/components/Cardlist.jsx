@@ -38,32 +38,32 @@ const features = [
 
 function Cardlist() {
   return (
-    <div className="hidden sm:block py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
-      <h1 className='text-2xl sm:text-3xl lg:text-4xl font-bold text-center text-gray-800 mb-2'>
+    <div className="py-6 sm:py-8 md:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
+      <h1 className='text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-center text-gray-800 mb-2'>
         Features
       </h1>
-      <hr className='mx-auto w-16 sm:w-20 lg:w-24 border-2 border-gray-800 mb-6 sm:mb-8 lg:mb-10'/>
-      
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 max-w-7xl mx-auto'>
+      <hr className='mx-auto w-12 sm:w-16 md:w-20 lg:w-24 border-2 border-gray-800 mb-4 sm:mb-6 md:mb-8 lg:mb-10'/>
+
+      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 lg:gap-8 max-w-7xl mx-auto'>
         {features.map((feature) => (
-          <div 
+          <div
             key={feature.id}
             className='bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1'
           >
-            <img 
-              src={feature.image} 
-              className='w-full h-40 sm:h-48 object-cover'
+            <img
+              src={feature.image}
+              className='w-full h-32 sm:h-40 md:h-48 object-cover'
               alt={feature.title}
             />
-            <div className='p-4 sm:p-6'>
-              <h2 className='font-bold text-lg sm:text-xl mb-3 sm:mb-4 text-center text-gray-800'>
+            <div className='p-3 sm:p-4 md:p-6'>
+              <h2 className='font-bold text-base sm:text-lg md:text-xl mb-2 sm:mb-3 md:mb-4 text-center text-gray-800'>
                 {feature.title}
               </h2>
-              <div className='space-y-2 sm:space-y-3'>
+              <div className='space-y-1.5 sm:space-y-2 md:space-y-3'>
                 {feature.items.map((item, index) => (
-                  <span 
+                  <span
                     key={index}
-                    className='block bg-gray-100 rounded-full px-3 py-2 text-xs sm:text-sm text-gray-700 cursor-pointer transition-all duration-200 ease-in-out hover:bg-gray-800 hover:text-white text-center'
+                    className='block bg-gray-100 rounded-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 cursor-pointer transition-all duration-200 ease-in-out hover:bg-gray-800 hover:text-white text-center'
                   >
                     {item}
                   </span>

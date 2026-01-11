@@ -54,7 +54,7 @@ export default function MobileBottomNav() {
       {/* More dropdown */}
       {showMore && (
         <div 
-          className="sm:hidden fixed bottom-16 right-0 z-50 bg-white rounded-t-xl shadow-lg border border-gray-200 w-40"
+          className="sm:hidden fixed bottom-16 right-0 z-50 bg-white/95 backdrop-blur-md rounded-t-xl shadow-lg border border-gray-200 w-40"
           onClick={() => setShowMore(false)}
         >
           {moreItems.map((item) => {
@@ -78,8 +78,8 @@ export default function MobileBottomNav() {
 
       {/* Logout confirmation popup */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-xs w-full text-center">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl p-6 max-w-xs w-full text-center">
             <h2 className="text-lg font-semibold mb-3 text-zinc-800">Are you sure?</h2>
             <div className="flex gap-4 justify-center mt-4">
               <button
@@ -102,7 +102,7 @@ export default function MobileBottomNav() {
       {/* Backdrop for more menu */}
       {showMore && (
         <div 
-          className="sm:hidden fixed inset-0 z-40 bg-black/20"
+          className="sm:hidden fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
           onClick={() => setShowMore(false)}
         />
       )}

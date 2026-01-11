@@ -73,12 +73,34 @@ function Profile() {
       // If viewing own profile, use currentUser info
       if (user && user.uid === userId) {
         googlePhotoURL = user.photoURL || '';
-        displayName = user.displayName || user.email?.split('@')[0] || '';
+        displayName = user.displayName || localStorage.getItem('displayName') || user.email?.split('@')[0] || user.email || '';
       }
       if (profileSnap.exists()) {
         const data = profileSnap.data();
+        
+        // For own profile, ensure we have a proper displayName
+        let finalDisplayName = data.displayName;
+        if (user && user.uid === userId) {
+          // For Google/Apple users, use their displayName
+          if (user.displayName) {
+            finalDisplayName = user.displayName;
+            // Update Firestore if the displayName doesn't match
+            if (data.displayName !== user.displayName) {
+              await updateDoc(profileRef, { displayName: user.displayName });
+            }
+          } 
+          // For email/password users, use email username if current displayName is userId or empty
+          else if (displayName && (data.displayName === userId || !data.displayName || data.displayName === user.email)) {
+            finalDisplayName = displayName;
+            // Update Firestore if the displayName needs to be updated
+            if (data.displayName !== displayName) {
+              await updateDoc(profileRef, { displayName: displayName });
+            }
+          }
+        }
+        
         setProfile({
-          displayName: data.displayName || displayName || userId,
+          displayName: finalDisplayName || displayName || userId,
           bio: data.bio || '',
           location: data.location || '',
           website: data.website || '',
