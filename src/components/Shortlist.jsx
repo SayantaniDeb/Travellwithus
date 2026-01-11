@@ -101,7 +101,27 @@ export default function Shortlist() {
           </div>
 
           {/* Content */}
-          {shortlistedHotels.length === 0 ? (
+          {!user ? (
+            <div className="flex flex-col items-center justify-center space-y-4 py-12 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100">
+                <svg className="h-10 w-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-lg font-medium text-slate-900">Sign in required</h2>
+                <p className="text-sm text-slate-600 max-w-sm">
+                  Please sign in to view and manage your shortlisted hotels.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/login')}
+                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-blue-700 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 touch-manipulation active:scale-95"
+              >
+                Sign In
+              </button>
+            </div>
+          ) : shortlistedHotels.length === 0 ? (
             <div className="flex flex-col items-center justify-center space-y-4 py-12 text-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100">
                 <HeartSolidIcon className="h-10 w-10 text-slate-400" />

@@ -127,7 +127,9 @@ function Section() {
       </div>
 
       {/* Features Section */}
-      <CardList />
+      <div className="hidden sm:block">
+        <CardList />
+      </div>
       <div className="hidden sm:block">
         <Bottom />
       </div>
