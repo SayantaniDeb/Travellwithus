@@ -1,26 +1,13 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    },
-    {
-      "src": "backend/main.py",
-      "use": "@vercel/python"
-    }
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/backend/main.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
+  "functions": {
+    "backend/main.py": {
+      "runtime": "@vercel/python@4.0.0"
     }
-  ]
+  }
 }
