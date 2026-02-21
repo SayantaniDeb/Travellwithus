@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLocation } from '../context/LocationContext';
 
 const LLM_PROVIDER = 'groq'; // 'groq' or 'openai'
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export default function TravelPlanner({ destination, onClose }) {
   const [step, setStep] = useState('dates'); // 'dates', 'loading', 'calendar', 'dayDetail'
@@ -85,7 +86,7 @@ Generate exactly ${numDays} days with incrementing dates starting from ${startDa
       let text;
 
       // Use backend proxy for LLM completions
-      response = await fetch('/api/completions', {
+      response = await fetch(`${API_URL}/api/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

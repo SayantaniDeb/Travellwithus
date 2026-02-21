@@ -587,10 +587,11 @@ const getSuggestedBudget = (location, currency) => {
 };
 
 const LLM_PROVIDER = 'groq'; // 'groq' or 'openai'
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Helper function to call AI via backend proxy
 const callAI = async (model, prompt, maxTokens = 8000) => {
-  const response = await fetch('/api/completions', {
+  const response = await fetch(`${API_URL}/api/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
