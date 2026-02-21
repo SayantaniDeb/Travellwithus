@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import httpx
 import os
+import sys
 import logging
 from dotenv import load_dotenv
 
@@ -15,6 +16,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 load_dotenv()
+
+# Add api directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import AI Router
 from ai_router import ai_router, FeatureType, semantic_cache, rate_limiter
