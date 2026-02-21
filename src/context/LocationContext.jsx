@@ -47,7 +47,7 @@ export const LocationProvider = ({ children }) => {
   const getLocationName = async (lat, lng) => {
     try {
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${import.meta.env.VITE_ACCESSTOKEN}`
+        `/api/geocode?lat=${lat}&lng=${lng}`
       );
       const data = await response.json();
       if (data.features && data.features.length > 0) {

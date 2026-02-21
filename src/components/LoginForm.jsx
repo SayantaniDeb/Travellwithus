@@ -1,9 +1,54 @@
 import React, { useEffect, useState } from 'react';
-import { auth, provider, appleProvider } from '../Firebase';
+import { auth, provider, db } from '../Firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import logo1 from '../img/54.jpg';
 import { Button } from '@material-tailwind/react';
 import { useNavigate } from 'react-router-dom';
+
+// Random avatar styles from DiceBear
+const AVATAR_STYLES = [
+  'adventurer', 'adventurer-neutral', 'avataaars', 'big-ears', 'big-smile',
+  'bottts', 'croodles', 'fun-emoji', 'icons', 'lorelei', 'micah', 'miniavs',
+  'notionists', 'open-peeps', 'personas', 'pixel-art', 'thumbs'
+];
+
+// Generate a consistent random avatar URL based on user ID
+const generateRandomAvatar = (seed) => {
+  // Use the seed to deterministically select a style
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const styleIndex = Math.abs(hash) % AVATAR_STYLES.length;
+  const style = AVATAR_STYLES[styleIndex];
+  return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}&backgroundColor=ffffff`;
+};
+
+// Create or get user profile
+const createUserProfile = async (user) => {
+  const profileRef = doc(db, 'user_profiles', user.uid);
+  const profileSnap = await getDoc(profileRef);
+  
+  if (!profileSnap.exists()) {
+    // Create new profile with random DiceBear avatar (ignore Google photo)
+    const displayName = user.displayName || user.email?.split('@')[0] || 'Traveler';
+    const photoURL = generateRandomAvatar(user.uid); // Always use random avatar
+    
+    await setDoc(profileRef, {
+      displayName,
+      bio: '',
+      location: '',
+      website: '',
+      photoURL,
+      travelStyle: '',
+      favoriteDestination: '',
+      countriesVisited: 0,
+      joinedAt: serverTimestamp(),
+      userId: user.uid,
+    });
+  }
+};
 
 function LoginForm() {
   const [value, setValue] = useState('')
@@ -22,11 +67,13 @@ function LoginForm() {
   // Check for redirect result on component mount
   useEffect(() => {
     getRedirectResult(auth)
-      .then((result) => {
+      .then(async (result) => {
         if (result?.user) {
           setValue(result.user.email)
           localStorage.setItem("email", result.user.email)
           localStorage.setItem("displayName", result.user.displayName || result.user.email?.split('@')[0] || 'User')
+          // Create user profile with random avatar if new user
+          await createUserProfile(result.user)
           navigate('/home')
         }
       })
@@ -53,10 +100,12 @@ function LoginForm() {
     } else {
       // Try popup method first
       signInWithPopup(auth, provider)
-        .then((data) => {
+        .then(async (data) => {
           setValue(data.user.email)
           localStorage.setItem("email", data.user.email)
           localStorage.setItem("displayName", data.user.displayName || data.user.email?.split('@')[0] || 'User')
+          // Create user profile with random avatar if new user
+          await createUserProfile(data.user)
           navigate('/home')
         })
         .catch((error) => {
@@ -79,35 +128,6 @@ function LoginForm() {
           }
         })
     }
-  }
-
-  const handleAppleSignIn = () => {
-    setLoading(true)
-    setError('')
-
-    signInWithPopup(auth, appleProvider)
-      .then((result) => {
-        // The signed-in user info
-        const user = result.user;
-        setValue(user.email)
-        localStorage.setItem("email", user.email)
-        localStorage.setItem("displayName", user.displayName || user.email?.split('@')[0] || 'User')
-        navigate('/home')
-      })
-      .catch((error) => {
-        console.error('Apple sign-in error:', error)
-        setLoading(false)
-
-        if (error.code === 'auth/popup-blocked') {
-          setError('Popup was blocked. Please allow popups for this site and try again.')
-        } else if (error.code === 'auth/popup-closed-by-user') {
-          setError('Sign-in was cancelled. Please try again.')
-        } else if (error.code === 'auth/cancelled-popup-request') {
-          setError('Another sign-in request is in progress. Please wait.')
-        } else {
-          setError('Apple sign-in failed. Please try again or contact support.')
-        }
-      })
   }
 
   const handleForgotPassword = async () => {
@@ -194,6 +214,9 @@ function LoginForm() {
       try {
         const result = await createUserWithEmailAndPassword(auth, email, password)
         
+        // Create user profile with random avatar
+        await createUserProfile(result.user)
+        
         // Send email verification
         await sendEmailVerification(result.user)
         
@@ -236,6 +259,8 @@ function LoginForm() {
         setValue(result.user.email)
         localStorage.setItem("email", result.user.email)
         localStorage.setItem("displayName", result.user.displayName || result.user.email?.split('@')[0] || 'User')
+        // Create user profile if doesn't exist (for existing users)
+        await createUserProfile(result.user)
         navigate('/home')
       } catch (error) {
         console.error('Sign in error:', error)
@@ -249,8 +274,6 @@ function LoginForm() {
             const methods = await fetchSignInMethodsForEmail(auth, email)
             if (methods.includes('google.com')) {
               setError('This email is registered with Google Sign-In. Please use "Sign in with Google" instead.')
-            } else if (methods.includes('apple.com')) {
-              setError('This email is registered with Apple Sign-In. Please use "Continue with Apple" instead.')
             } else {
               setError('Incorrect password. Please try again or reset your password.')
             }
@@ -490,15 +513,6 @@ function LoginForm() {
                 {loading ? 'Signing in...' : useRedirect ? 'Continue with Google' : 'Sign in with Google'}
               </Button>
 
-              <Button
-                color="gray"
-                ripple={true}
-                className="w-full py-3 sm:py-3.5 text-xs sm:text-sm md:text-base font-semibold rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 bg-black hover:bg-gray-800 text-white"
-                onClick={handleAppleSignIn}
-                disabled={loading}
-              >
-                {loading ? 'Signing in...' : 'Continue with Apple'}
-              </Button>
             </div>
           </div>
         </div>

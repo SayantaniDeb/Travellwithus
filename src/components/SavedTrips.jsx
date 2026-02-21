@@ -5,6 +5,33 @@ import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } fro
 import { onAuthStateChanged } from 'firebase/auth';
 import Navbar from './Navbar';
 
+// LLM provider configuration
+const LLM_PROVIDER = import.meta.env.VITE_LLM_PROVIDER || 'groq';
+
+// Helper function to call AI via backend proxy
+const callAI = async (model, prompt, maxTokens = 8000) => {
+  const response = await fetch('/api/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: 'You are a travel planner. Return ONLY valid JSON, no markdown, no explanation. Keep responses concise.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: maxTokens,
+      temperature: 0.7,
+      provider: LLM_PROVIDER
+    })
+  });
+
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  return data.choices?.[0]?.message?.content;
+};
+
 // Currency data for display
 const CURRENCIES = {
   USD: { symbol: '$', name: 'US Dollar' },
@@ -32,6 +59,9 @@ export default function SavedTrips() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [editedDay, setEditedDay] = useState(null);
+  const [showBudgetEditModal, setShowBudgetEditModal] = useState(false);
+  const [newBudget, setNewBudget] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -100,6 +130,152 @@ export default function SavedTrips() {
     } catch (err) {
       console.error('Error updating day:', err);
       alert('Failed to update day');
+    }
+  };
+
+  // Regenerate plan with new budget
+  const regeneratePlanWithBudget = async () => {
+    if (!selectedTrip || !newBudget) return;
+    
+    const budgetNum = parseFloat(newBudget);
+    if (isNaN(budgetNum) || budgetNum <= 0) {
+      alert('Please enter a valid budget amount');
+      return;
+    }
+
+    setRegenerating(true);
+    
+    const currency = selectedTrip.currency || 'INR';
+    const currencySymbol = CURRENCIES[currency]?.symbol || '₹';
+    const destination = selectedTrip.actualDestination || selectedTrip.destination;
+    const source = selectedTrip.source || '';
+    const numDays = selectedTrip.days?.length || 3;
+    const startDate = selectedTrip.startDate || selectedTrip.days?.[0]?.date;
+    const endDate = selectedTrip.endDate || selectedTrip.days?.[numDays - 1]?.date;
+
+    const prompt = `Regenerate a ${numDays}-day travel plan for "${destination}"${source ? ` from ${source}` : ''} with a NEW BUDGET of ${currencySymbol}${budgetNum}.
+
+Previous budget was: ${currencySymbol}${selectedTrip.budgetAmount || 'not specified'}
+New budget is: ${currencySymbol}${budgetNum}
+
+Dates: ${startDate} to ${endDate}. Currency: ${currency} (${currencySymbol}).
+
+IMPORTANT: Adjust the plan based on the budget change:
+${budgetNum > (selectedTrip.budgetAmount || 0) ? 
+  '- Budget INCREASED: Upgrade accommodations, add premium activities, consider better transport options, include nicer restaurants' : 
+  '- Budget DECREASED: Use more budget-friendly accommodations, free/cheap activities, public transport, street food options'}
+
+CRITICAL - Use REALISTIC 2024-2026 prices. Consider ACTUAL distance:
+${currency === 'INR' ? `
+TRANSPORT (based on distance):
+- Short distance (<200km): Bus ₹200-₹600, Train ₹150-₹500
+- Medium distance (200-500km): Bus ₹600-₹1,200, Train ₹400-₹1,200, Flight ₹2,500-₹5,000
+- Long distance (500km+): Bus ₹1,000-₹2,500, Train ₹800-₹2,500, Flight ₹3,500-₹12,000
+
+ACCOMMODATION per night (adjust based on budget):
+- Budget hostels/guesthouses: ₹500-₹1,500
+- Mid-range hotels: ₹1,500-₹4,000
+- Good hotels: ₹4,000-₹8,000
+- Luxury/resorts: ₹8,000-₹25,000+
+
+FOOD per day: ₹400-₹1,500 (street food to restaurants)
+ACTIVITIES: Entry fees ₹50-₹500, guides ₹500-₹2,000
+` : `
+Adjust prices appropriately for ${currency} currency.
+`}
+
+Return ONLY valid JSON (keep same structure as original):
+{
+  "destination": "${selectedTrip.destination}",
+  "actualDestination": "${destination}",
+  "source": "${source}",
+  "summary": "Brief trip overview adjusted for new budget",
+  "currency": "${currency}",
+  "currencySymbol": "${currencySymbol}",
+  "budgetAmount": ${budgetNum},
+  "travelInfo": {
+    "from": "${source}",
+    "fromStation": "Departure station/airport",
+    "to": "${destination}",
+    "toStation": "Arrival station/airport",
+    "recommendedMode": "Flight/Train/Bus (choose based on budget)",
+    "estimatedTicketCost": "${currencySymbol}XXX",
+    "travelDuration": "X hours",
+    "tips": "Budget-appropriate travel tip"
+  },
+  "days": [
+    ${Array.from({length: numDays}, (_, i) => `{
+      "day": ${i + 1},
+      "date": "${selectedTrip.days?.[i]?.date || ''}",
+      "title": "Day title",
+      "summary": "Day summary adjusted for budget",
+      "morning": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h"},
+      "afternoon": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "3h"},
+      "evening": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h"},
+      "meals": {"breakfast": "Budget-appropriate food", "lunch": "Budget-appropriate food", "dinner": "Budget-appropriate food"},
+      "tips": ["Tip"]
+    }`).join(',\n    ')}
+  ],
+  "packingList": ["Item1", "Item2"],
+  "totalBudget": "${currencySymbol}${budgetNum}"
+}`;
+
+    try {
+      let text;
+      if (LLM_PROVIDER === 'groq') {
+        text = await callAI('openai/gpt-oss-20b', prompt, 6000);
+      } else {
+        text = await callAI('gpt-4o', prompt, 6000);
+      }
+
+      if (text) {
+        let cleanText = text.trim();
+        if (cleanText.startsWith('```json')) cleanText = cleanText.slice(7);
+        else if (cleanText.startsWith('```')) cleanText = cleanText.slice(3);
+        if (cleanText.endsWith('```')) cleanText = cleanText.slice(0, -3);
+        cleanText = cleanText.trim();
+
+        let planData;
+        try {
+          planData = JSON.parse(cleanText);
+        } catch (parseErr) {
+          // Try to fix truncated JSON
+          let fixedText = cleanText;
+          const openBraces = (cleanText.match(/{/g) || []).length;
+          const closeBraces = (cleanText.match(/}/g) || []).length;
+          const openBrackets = (cleanText.match(/\[/g) || []).length;
+          const closeBrackets = (cleanText.match(/\]/g) || []).length;
+          
+          for (let i = 0; i < openBrackets - closeBrackets; i++) fixedText += ']';
+          for (let i = 0; i < openBraces - closeBraces; i++) fixedText += '}';
+          
+          planData = JSON.parse(fixedText);
+        }
+
+        // Update in Firestore
+        await updateDoc(doc(db, 'users', user.uid, 'trips', selectedTrip.id), {
+          ...planData,
+          source: source,
+          budgetAmount: budgetNum,
+          updatedAt: new Date()
+        });
+
+        // Update local state
+        setSelectedTrip({
+          ...selectedTrip,
+          ...planData,
+          budgetAmount: budgetNum
+        });
+
+        setShowBudgetEditModal(false);
+        setNewBudget('');
+        alert('Trip updated with new budget! 🎉');
+      }
+    } catch (err) {
+      console.error('Error regenerating plan:', err);
+      alert('Failed to regenerate plan. Please try again.');
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -184,7 +360,25 @@ export default function SavedTrips() {
                     className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 p-5 cursor-pointer hover:border-zinc-300 hover:shadow-xl hover:shadow-zinc-200/50 transition-all duration-300 group hover:-translate-y-1"
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <h3 className="text-lg font-semibold text-zinc-900 group-hover:text-zinc-700">{trip.destination}</h3>
+                      <div>
+                        {trip.source && (
+                          <div className="flex items-center gap-1.5 text-zinc-500 text-xs mb-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            From: {trip.source}
+                          </div>
+                        )}
+                        <h3 className="text-lg font-semibold text-zinc-900 group-hover:text-zinc-700 flex items-center gap-2">
+                          {trip.source && (
+                            <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                            </svg>
+                          )}
+                          {trip.destination}
+                        </h3>
+                      </div>
                       <span className="bg-gradient-to-r from-zinc-100 to-zinc-50 text-zinc-600 text-xs font-medium px-3 py-1 rounded-full shadow-sm border border-zinc-200/60">
                         {trip.days?.length || 0} days
                       </span>
@@ -227,47 +421,6 @@ export default function SavedTrips() {
         <Navbar />
         <div className="pt-20 sm:pt-24 pb-24 px-4">
           <div className="max-w-2xl mx-auto">
-            {/* Getting There Section */}
-            {trip?.travelInfo && day.day === 1 && (
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-lg p-5 mb-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                  </div>
-                  <h3 className="font-semibold text-zinc-900">Getting There</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Route</p>
-                      <p className="text-sm font-medium text-zinc-900">{trip.travelInfo.from} → {trip.travelInfo.to}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Mode</p>
-                      <p className="text-sm font-medium text-zinc-900">{trip.travelInfo.recommendedMode}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Ticket Cost</p>
-                      <p className="text-sm font-semibold text-emerald-700">{trip.travelInfo.estimatedTicketCost}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Duration</p>
-                      <p className="text-sm font-medium text-zinc-900">{trip.travelInfo.travelDuration}</p>
-                    </div>
-                  </div>
-                </div>
-                {trip.travelInfo.tips && (
-                  <div className="mt-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded-r-xl">
-                    <p className="text-xs text-blue-700">{trip.travelInfo.tips}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Header */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl shadow-zinc-200/50 p-5 mb-6">
               <div className="flex items-center justify-between">
@@ -567,9 +720,40 @@ export default function SavedTrips() {
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl shadow-zinc-200/50 p-5 sm:p-6 mb-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex-1">
-                <h1 className="text-xl sm:text-2xl font-semibold text-zinc-900">{selectedTrip.destination}</h1>
+                {/* Journey Route - From → To */}
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  {selectedTrip.source && (
+                    <>
+                      <span className="text-zinc-600 font-medium">{selectedTrip.source}</span>
+                      <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    </>
+                  )}
+                  <h1 className="text-xl sm:text-2xl font-semibold text-zinc-900">
+                    {selectedTrip.actualDestination || selectedTrip.destination}
+                  </h1>
+                </div>
+                {/* Show original search term if resolved to different place (only if truly different, not just more specific) */}
+                {selectedTrip.actualDestination && 
+                 selectedTrip.actualDestination.toLowerCase() !== selectedTrip.destination.toLowerCase() && 
+                 !selectedTrip.actualDestination.toLowerCase().includes(selectedTrip.destination.toLowerCase()) && (
+                  <p className="text-blue-600 text-xs mb-1">
+                    You searched for "{selectedTrip.destination}" → Planned for {selectedTrip.actualDestination}
+                  </p>
+                )}
                 <p className="text-zinc-500 text-sm mt-1">{selectedTrip.summary}</p>
                 <div className="flex flex-wrap gap-2 mt-4">
+                  {/* From Location Badge */}
+                  {selectedTrip.source && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full shadow-sm">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      From: {selectedTrip.source}
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 text-zinc-700 text-xs font-medium rounded-full shadow-sm">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -586,7 +770,16 @@ export default function SavedTrips() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setNewBudget(selectedTrip.budgetAmount?.toString() || '');
+                    setShowBudgetEditModal(true);
+                  }}
+                  className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/25"
+                >
+                  ✏️ Edit Budget
+                </button>
                 <button
                   onClick={() => navigate(`/budget/${selectedTrip.id}`)}
                   className="px-4 py-2.5 bg-black text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all shadow-lg shadow-zinc-900/25"
@@ -608,6 +801,122 @@ export default function SavedTrips() {
               </div>
             </div>
           </div>
+
+          {/* Travel Tickets Card */}
+          {selectedTrip.travelInfo && (
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-lg p-5 mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-zinc-900">Travel Tickets</h3>
+                  <p className="text-xs text-zinc-500">Estimated costs for your journey</p>
+                </div>
+              </div>
+              
+              {/* To and Fro Tickets */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Onward Journey */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">→</span>
+                    <span className="text-sm font-medium text-blue-800">Onward Journey</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-600">From</span>
+                        <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.from || selectedTrip.source || 'Your City'}</span>
+                      </div>
+                      {selectedTrip.travelInfo.fromStation && (
+                        <span className="text-xs text-blue-600 text-right">{selectedTrip.travelInfo.fromStation}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-600">To</span>
+                        <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.to || selectedTrip.actualDestination || selectedTrip.destination}</span>
+                      </div>
+                      {selectedTrip.travelInfo.toStation && (
+                        <span className="text-xs text-blue-600 text-right">{selectedTrip.travelInfo.toStation}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-600">Mode</span>
+                      <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.recommendedMode}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-600">Duration</span>
+                      <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.travelDuration}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-blue-200">
+                      <span className="text-xs font-medium text-blue-700">Ticket Cost</span>
+                      <span className="text-lg font-bold text-blue-700">{selectedTrip.travelInfo.estimatedTicketCost}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Return Journey */}
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">←</span>
+                    <span className="text-sm font-medium text-purple-800">Return Journey</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-600">From</span>
+                        <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.to || selectedTrip.actualDestination || selectedTrip.destination}</span>
+                      </div>
+                      {selectedTrip.travelInfo.toStation && (
+                        <span className="text-xs text-purple-600 text-right">{selectedTrip.travelInfo.toStation}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-600">To</span>
+                        <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.from || selectedTrip.source || 'Your City'}</span>
+                      </div>
+                      {selectedTrip.travelInfo.fromStation && (
+                        <span className="text-xs text-purple-600 text-right">{selectedTrip.travelInfo.fromStation}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-600">Mode</span>
+                      <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.recommendedMode}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-600">Duration</span>
+                      <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.travelDuration}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-purple-200">
+                      <span className="text-xs font-medium text-purple-700">Ticket Cost</span>
+                      <span className="text-lg font-bold text-purple-700">{selectedTrip.travelInfo.estimatedTicketCost}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Total & Tips */}
+              <div className="mt-4 pt-4 border-t border-zinc-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-zinc-700">Total Travel Cost (Round Trip)</span>
+                  <span className="text-xl font-bold text-emerald-600">
+                    {selectedTrip.travelInfo.estimatedTicketCost?.replace(/[\d,.]+/, (match) => (parseFloat(match.replace(/,/g, '')) * 2).toLocaleString())}
+                  </span>
+                </div>
+                {selectedTrip.travelInfo.tips && (
+                  <div className="flex items-start gap-2 mt-3 p-3 bg-amber-50 rounded-xl">
+                    <span className="text-amber-500">💡</span>
+                    <p className="text-xs text-amber-800">{selectedTrip.travelInfo.tips}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Days Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -688,6 +997,104 @@ export default function SavedTrips() {
           )}
         </div>
       </div>
+
+      {/* Budget Edit Modal */}
+      {showBudgetEditModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-900">Edit Budget</h3>
+                <p className="text-sm text-zinc-500">Adjust budget to regenerate your plan</p>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <div className="bg-zinc-50 rounded-xl p-3 mb-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-500">Current Budget:</span>
+                  <span className="font-semibold text-zinc-900">
+                    {CURRENCIES[selectedTrip.currency]?.symbol || '₹'}{selectedTrip.budgetAmount?.toLocaleString() || 'Not set'}
+                  </span>
+                </div>
+              </div>
+
+              <label className="block text-sm font-medium text-zinc-700 mb-2">New Budget</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-medium">
+                  {CURRENCIES[selectedTrip.currency]?.symbol || '₹'}
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={newBudget}
+                  onChange={(e) => setNewBudget(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Enter new budget"
+                  className="w-full pl-8 pr-4 py-3 bg-white border border-zinc-300 rounded-xl text-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+              
+              {newBudget && selectedTrip.budgetAmount && (
+                <p className={`text-xs mt-2 ${parseFloat(newBudget) > selectedTrip.budgetAmount ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {parseFloat(newBudget) > selectedTrip.budgetAmount 
+                    ? `↑ Budget increased by ${CURRENCIES[selectedTrip.currency]?.symbol}${(parseFloat(newBudget) - selectedTrip.budgetAmount).toLocaleString()} - Plan will include upgraded options`
+                    : parseFloat(newBudget) < selectedTrip.budgetAmount
+                    ? `↓ Budget decreased by ${CURRENCIES[selectedTrip.currency]?.symbol}${(selectedTrip.budgetAmount - parseFloat(newBudget)).toLocaleString()} - Plan will focus on budget-friendly options`
+                    : ''}
+                </p>
+              )}
+            </div>
+
+            <div className="bg-blue-50 rounded-xl p-3 mb-4">
+              <div className="flex items-start gap-2">
+                <span className="text-blue-500 text-lg">💡</span>
+                <p className="text-xs text-blue-700">
+                  Changing your budget will regenerate the entire trip plan with adjusted accommodations, activities, and recommendations to fit your new budget.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowBudgetEditModal(false);
+                  setNewBudget('');
+                }}
+                disabled={regenerating}
+                className="flex-1 px-4 py-3 bg-zinc-100 text-zinc-700 rounded-xl text-sm font-medium hover:bg-zinc-200 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={regeneratePlanWithBudget}
+                disabled={regenerating || !newBudget || parseFloat(newBudget) === selectedTrip.budgetAmount}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {regenerating ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Regenerate Plan
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

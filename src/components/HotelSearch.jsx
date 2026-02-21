@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
-import Bottom from './bottomfoot';
 import { auth, db } from '../Firebase';
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline';
@@ -587,59 +586,30 @@ const getSuggestedBudget = (location, currency) => {
   return budgetRanges[locationKey]?.[currency] || null;
 };
 
-const LLM_PROVIDER = 'groq'; // 'groq', 'gemini', or 'openai'
+const LLM_PROVIDER = 'groq'; // 'groq' or 'openai'
 
-// Helper function to call AI
+// Helper function to call AI via backend proxy
 const callAI = async (model, prompt, maxTokens = 8000) => {
-  if (LLM_PROVIDER === 'groq') {
-    const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-    if (!apiKey) throw new Error('Groq API key not configured. Get it free at: https://console.groq.com/keys');
+  const response = await fetch('/api/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: 'You are a hotel search assistant. Return ONLY valid JSON, no markdown, no explanation. Keep responses concise.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: maxTokens,
+      temperature: 0.7,
+      provider: LLM_PROVIDER
+    })
+  });
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: 'You are a hotel search assistant. Return ONLY valid JSON, no markdown, no explanation. Keep responses concise.' },
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: maxTokens,
-        temperature: 0.7
-      })
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    return data.choices?.[0]?.message?.content;
-  } else if (LLM_PROVIDER === 'openai') {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) throw new Error('OpenAI API key not configured');
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: 'You are a hotel search assistant. Return ONLY valid JSON, no markdown, no explanation. Keep responses concise.' },
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: maxTokens,
-        temperature: 0.7
-      })
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    return data.choices?.[0]?.message?.content;
-  }
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  return data.choices?.[0]?.message?.content;
 };
 
 export default function HotelSearch() {
@@ -1146,11 +1116,6 @@ Return ONLY valid JSON:
               </p>
             </div>
           )}
-        </div>
-      </div>
-      <div className="w-full fixed bottom-0">
-        <div className="hidden sm:block">
-          <Bottom />
         </div>
       </div>
     </div>

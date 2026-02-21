@@ -3,11 +3,10 @@ import { useState, useEffect } from "react";
 import CityComponent from "./modules/CityComponent";
 import WeatherComponent from "./modules/WeatherInfoComponent";
 import Navbar from "./Navbar";
-import Bottom from "./bottomfoot";
 import { Button } from "@material-tailwind/react";
 import { useLocation } from "../context/LocationContext";
 
-const API_KEY = 'dd16b6763c687a83382a2fdcd46ddaab';
+// No API key needed - using backend proxy
 
 export const WeatherIcons = {
   "01d": "/icons/sunny.svg",
@@ -43,7 +42,7 @@ function Weather() {
         setError(null);
         try {
           const response = await axios.get(
-            `https://api.openweathermap.org/data/2.5/weather?lat=${location.latitude}&lon=${location.longitude}&appid=${API_KEY}`
+            `/api/weather?lat=${location.latitude}&lon=${location.longitude}`
           );
           updateWeather(response.data);
           setAutoLoaded(true);
@@ -64,7 +63,7 @@ function Weather() {
     setError(null);
     try {
       const response = await axios.get(
-        `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}`
+        `/api/weather?q=${city}`
       );
       updateWeather(response.data);
     } catch (err) {
@@ -83,7 +82,7 @@ function Weather() {
   const isInitialLoading = locationLoading || (location && !autoLoaded && loading);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-blue-100 pb-16 sm:pb-0">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-blue-100">
       <Navbar />
       
       <div className="flex-1 flex items-center justify-center px-4 py-8 mt-16 sm:mt-20">
@@ -133,10 +132,6 @@ function Weather() {
             />
           )}
         </div>
-      </div>
-
-      <div className="hidden sm:block">
-        <Bottom />
       </div>
     </div>
   );

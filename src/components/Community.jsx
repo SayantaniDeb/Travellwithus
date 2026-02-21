@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
-import Bottom from './bottomfoot';
 import { db, auth, storage } from '../Firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
@@ -221,22 +220,28 @@ function Community() {
     setPollVoting(v => ({ ...v, [postId]: false }));
   };
 
-  // Format date
+  // Format date as relative time
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Just now';
     
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     const now = new Date();
     const diffMs = now - date;
+    const diffSecs = Math.floor(diffMs / 1000);
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
+    const diffWeeks = Math.floor(diffDays / 7);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
 
-    if (diffMins < 1) return 'Just now';
+    if (diffSecs < 60) return diffSecs <= 5 ? 'Just now' : `${diffSecs}s ago`;
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
+    if (diffDays < 7) return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
+    if (diffWeeks < 4) return diffWeeks === 1 ? '1 week ago' : `${diffWeeks} weeks ago`;
+    if (diffMonths < 12) return diffMonths === 1 ? '1 month ago' : `${diffMonths} months ago`;
+    return diffYears === 1 ? '1 year ago' : `${diffYears} years ago`;
   };
 
   // Get initials for avatar
@@ -272,9 +277,6 @@ function Community() {
             </div>
           </div>
         </div>
-        <div className="hidden sm:block">
-          <Bottom />
-        </div>
       </div>
     );
   }
@@ -295,12 +297,23 @@ function Community() {
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-lg p-4 mb-6">
             <div className="flex gap-3">
               {(userProfile?.photoURL || user.photoURL) ? (
-                <img src={userProfile?.photoURL || user.photoURL} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
-                  {getInitials(userProfile?.displayName || user.displayName || user.email)}
-                </div>
-              )}
+                <img 
+                  src={userProfile?.photoURL || user.photoURL} 
+                  alt="" 
+                  className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-zinc-100"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div 
+                className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 items-center justify-center text-white font-medium text-sm flex-shrink-0"
+                style={{ display: (userProfile?.photoURL || user.photoURL) ? 'none' : 'flex' }}
+              >
+                {getInitials(userProfile?.displayName || user.displayName || user.email)}
+              </div>
               <div className="flex-1">
                 <textarea
                   ref={textareaRef}
@@ -389,17 +402,22 @@ function Community() {
                           <img
                             src={post.authorPhoto}
                             alt=""
-                            className="w-10 h-10 rounded-full object-cover cursor-pointer"
+                            className="w-10 h-10 rounded-full object-cover cursor-pointer bg-zinc-100"
                             onClick={() => navigate(`/profile?uid=${post.authorId}`)}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
                           />
-                        ) : (
-                          <div
-                            className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white font-medium text-sm cursor-pointer"
-                            onClick={() => navigate(`/profile?uid=${post.authorId}`)}
-                          >
-                            {getInitials(post.authorName)}
-                          </div>
-                        )}
+                        ) : null}
+                        <div
+                          className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 items-center justify-center text-white font-medium text-sm cursor-pointer"
+                          style={{ display: post.authorPhoto ? 'none' : 'flex' }}
+                          onClick={() => navigate(`/profile?uid=${post.authorId}`)}
+                        >
+                          {getInitials(post.authorName)}
+                        </div>
                         <div>
                           <h4
                             className="font-medium text-zinc-900 text-sm cursor-pointer hover:underline"
@@ -526,17 +544,22 @@ function Community() {
                             <img
                               src={reply.authorPhoto}
                               alt=""
-                              className="w-8 h-8 rounded-full object-cover flex-shrink-0 cursor-pointer"
+                              className="w-8 h-8 rounded-full object-cover flex-shrink-0 cursor-pointer bg-zinc-100"
                               onClick={() => navigate(`/profile?uid=${reply.authorId}`)}
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                              }}
                             />
-                          ) : (
-                            <div
-                              className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-medium text-xs flex-shrink-0 cursor-pointer"
-                              onClick={() => navigate(`/profile?uid=${reply.authorId}`)}
-                            >
-                              {getInitials(reply.authorName)}
-                            </div>
-                          )}
+                          ) : null}
+                          <div
+                            className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-green-600 items-center justify-center text-white font-medium text-xs flex-shrink-0 cursor-pointer"
+                            style={{ display: reply.authorPhoto ? 'none' : 'flex' }}
+                            onClick={() => navigate(`/profile?uid=${reply.authorId}`)}
+                          >
+                            {getInitials(reply.authorName)}
+                          </div>
                           <div className="flex-1 bg-white rounded-xl px-3 py-2">
                             <div className="flex items-center gap-2 mb-1">
                               {/* Make name clickable */}
@@ -559,10 +582,6 @@ function Community() {
             </div>
           )}
         </div>
-      </div>
-      
-      <div className="w-full fixed bottom-0">
-        <Bottom />
       </div>
     </div>
   );

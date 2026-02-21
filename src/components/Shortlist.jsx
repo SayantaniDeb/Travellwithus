@@ -4,8 +4,6 @@ import { auth, db } from '../Firebase';
 import { doc, getDoc, updateDoc, arrayRemove } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import Navbar from './Navbar';
-import Bottom from './bottomfoot';
-import MobileBottomNav from './MobileBottomNav';
 import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid';
 import { MapPinIcon, StarIcon, TrashIcon } from '@heroicons/react/24/outline';
 
@@ -78,13 +76,12 @@ export default function Shortlist() {
             <p className="text-sm text-slate-600">Loading your shortlist...</p>
           </div>
         </div>
-        <MobileBottomNav />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 sm:pb-0">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
 
       <div className="container max-w-2xl mx-auto px-4 py-4 sm:py-8 pt-20 sm:pt-24">
@@ -228,16 +225,6 @@ export default function Shortlist() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Mobile Bottom Navigation */}
-      <div className="sm:hidden">
-        <MobileBottomNav />
-      </div>
-
-      {/* Desktop Bottom Footer */}
-      <div className="hidden sm:block w-full fixed bottom-0">
-        <Bottom />
       </div>
     </div>
   );

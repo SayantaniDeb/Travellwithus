@@ -1,7 +1,0 @@
-/* Mapbox Container - Only set size, let Mapbox use its default styles */
-
-#map {
-  width: 100%;
-  height: calc(100vh - 64px);
-  margin-top: 64px;
-}

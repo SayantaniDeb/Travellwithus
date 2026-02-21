@@ -1,11 +1,11 @@
 import { Fragment, React, useState, useEffect } from 'react'
 import { Disclosure, Menu, Transition } from '@headlessui/react'
-import { Bars3Icon, BellIcon, XMarkIcon, ArrowRightOnRectangleIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
+import { Bars3Icon, BellIcon, XMarkIcon, ArrowRightOnRectangleIcon, DocumentTextIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Button } from '@material-tailwind/react'
 import { signOut, onAuthStateChanged } from 'firebase/auth'
 import { auth, db } from '../Firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { useLocation } from '../context/LocationContext'
 import {
   HomeIcon,
@@ -139,24 +139,138 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showSignInPopup, setShowSignInPopup] = useState(false);
+  
+  // PWA Install state
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [canInstall, setCanInstall] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIOSInstructions, setShowIOSInstructions] = useState(false);
+
+  // PWA Install handler
+  useEffect(() => {
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    setIsIOS(iOS);
+    
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                      window.navigator.standalone === true;
+    setIsStandalone(standalone);
+
+    // Check if already dismissed install prompt recently (within 7 days)
+    const dismissedTime = localStorage.getItem('pwaInstallDismissed');
+    const showAgain = !dismissedTime || (Date.now() - parseInt(dismissedTime)) > 7 * 24 * 60 * 60 * 1000;
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (showAgain) {
+        setCanInstall(true);
+      }
+    };
+
+    const handleAppInstalled = () => {
+      setCanInstall(false);
+      setDeferredPrompt(null);
+      setIsStandalone(true);
+      localStorage.removeItem('pwaInstallDismissed');
+    };
+
+    if (!iOS) {
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      // For browsers that support PWA but event hasn't fired yet, 
+      // show button if not standalone and not recently dismissed
+      if (!standalone && showAgain) {
+        setCanInstall(true);
+      }
+    } else if (!standalone && showAgain) {
+      setCanInstall(true); // Show install option for iOS too
+    }
+
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      if (!iOS) {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      }
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (isIOS) {
+      setShowIOSInstructions(true);
+      return;
+    }
+    
+    if (!deferredPrompt) {
+      // If no deferred prompt, show manual instructions
+      alert('To install: Click the browser menu (⋮) and select "Install app" or "Add to Home Screen"');
+      return;
+    }
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+    if (outcome === 'accepted') {
+      setCanInstall(false);
+      localStorage.removeItem('pwaInstallDismissed');
+    } else {
+      // User dismissed, remember for 7 days
+      localStorage.setItem('pwaInstallDismissed', Date.now().toString());
+      setCanInstall(false);
+    }
+  };
+
+  // Random avatar styles from DiceBear
+  const AVATAR_STYLES = [
+    'adventurer', 'adventurer-neutral', 'avataaars', 'big-ears', 'big-smile',
+    'bottts', 'croodles', 'fun-emoji', 'icons', 'lorelei', 'micah', 'miniavs',
+    'notionists', 'open-peeps', 'personas', 'pixel-art', 'thumbs'
+  ];
+
+  // Generate a consistent random avatar URL based on user ID
+  const generateRandomAvatar = (seed) => {
+    // Use the seed to deterministically select a style
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const styleIndex = Math.abs(hash) % AVATAR_STYLES.length;
+    const style = AVATAR_STYLES[styleIndex];
+    return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}&backgroundColor=ffffff`;
+  };
 
   // Fetch user profile photo
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (userObj) => {
       setUser(userObj);
       if (userObj) {
-        setUserPhoto(userObj.photoURL);
         setUserName(userObj.displayName || userObj.email?.split('@')[0] || '');
         try {
           const profileRef = doc(db, 'user_profiles', userObj.uid);
           const profileSnap = await getDoc(profileRef);
           if (profileSnap.exists()) {
             const data = profileSnap.data();
-            if (data.photoURL) setUserPhoto(data.photoURL);
+            // Check if photoURL is a DiceBear avatar WITH white background
+            if (data.photoURL && data.photoURL.includes('dicebear.com') && data.photoURL.includes('backgroundColor=ffffff')) {
+              setUserPhoto(data.photoURL);
+            } else {
+              // Generate random avatar with white background
+              const randomAvatar = generateRandomAvatar(userObj.uid);
+              setUserPhoto(randomAvatar);
+              // Save to profile
+              await updateDoc(profileRef, { photoURL: randomAvatar });
+            }
             if (data.displayName) setUserName(data.displayName);
+          } else {
+            // No profile exists - generate random avatar
+            const randomAvatar = generateRandomAvatar(userObj.uid);
+            setUserPhoto(randomAvatar);
           }
         } catch (error) {
           console.error('Error fetching profile:', error);
+          // Fallback to random avatar
+          setUserPhoto(generateRandomAvatar(userObj.uid));
         }
       } else {
         setUserPhoto(null);
@@ -196,11 +310,22 @@ export default function Navbar() {
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 md:w-6 md:h-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
                   </svg>
-                  <span className='hidden md:inline font-bold font-serif text-lg md:text-2xl'>Travel With Us</span>
+                  <span className='font-bold font-serif text-base sm:text-lg md:text-2xl'>TravellWithUs</span>
                 </NavLink>
               </div>
               {/* Only location badge and profile icon (question mark) for signed out */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Install App Button */}
+                {canInstall && !isStandalone && (
+                  <button
+                    onClick={handleInstallClick}
+                    className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
+                    title="Install App"
+                  >
+                    <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Install</span>
+                  </button>
+                )}
                 <LocationBadge />
                 <button
                   onClick={() => setShowSignInPopup(true)}
@@ -241,6 +366,38 @@ export default function Navbar() {
             </div>
           </div>
         )}
+        {/* iOS Install Instructions popup */}
+        {showIOSInstructions && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl p-6 max-w-sm w-full text-center mx-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ArrowDownTrayIcon className="w-6 h-6 text-blue-600" />
+              </div>
+              <h2 className="text-lg font-semibold mb-2 text-zinc-800">Install Travel With Us</h2>
+              <p className="text-sm text-gray-600 mb-4">To install this app on your iPhone/iPad:</p>
+              <ol className="text-left text-sm text-gray-700 space-y-2 mb-4">
+                <li className="flex items-start gap-2">
+                  <span className="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">1</span>
+                  <span>Tap the <strong>Share</strong> button at the bottom of Safari</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">2</span>
+                  <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">3</span>
+                  <span>Tap <strong>"Add"</strong> in the top right corner</span>
+                </li>
+              </ol>
+              <button
+                onClick={() => setShowIOSInstructions(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow hover:bg-blue-700 transition-colors w-full"
+              >
+                Got it!
+              </button>
+            </div>
+          </div>
+        )}
       </>
     );
   }
@@ -257,8 +414,8 @@ export default function Navbar() {
               </svg>
               <span className='hidden md:inline font-bold font-serif text-lg md:text-2xl'>Travel With Us</span>
             </NavLink>
-            {/* Desktop navigation - hidden on mobile */}
-            <div className="hidden md:flex flex-1 items-center justify-center space-x-4">
+            {/* Desktop navigation - hidden on mobile and tablet, only show on large screens */}
+            <div className="hidden lg:flex flex-1 items-center justify-center space-x-4">
               {navigation.map((item, idx) => {
                 const Icon = navIcons[idx];
                 return (
@@ -273,7 +430,7 @@ export default function Navbar() {
                     }
                   >
                     <Icon className="w-5 h-5 mb-0.5" />
-                    <span className="hidden md:inline-block text-[10px] leading-tight">{item.name}</span>
+                    <span className="hidden lg:inline-block text-[10px] leading-tight">{item.name}</span>
                   </NavLink>
                 );
               })}
@@ -281,6 +438,17 @@ export default function Navbar() {
               <div className="flex flex-col items-center justify-center px-2 py-1">
                 <LocationBadge />
               </div>
+              {/* Install App Button */}
+              {canInstall && !isStandalone && (
+                <button
+                  onClick={handleInstallClick}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
+                  title="Install App"
+                >
+                  <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                  <span>Install</span>
+                </button>
+              )}
               {/* Profile Icon */}
               <NavLink 
                 to="/profile" 
@@ -291,21 +459,38 @@ export default function Navbar() {
                   <img 
                     src={userPhoto} 
                     alt={userName} 
-                    className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover border-2 border-white shadow-sm"
+                    className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover border-2 border-white shadow-sm bg-zinc-100"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
                   />
-                ) : (
-                  <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-xs md:text-sm border-2 border-white shadow-sm">
-                    {getInitials(userName)}
-                  </div>
-                )}
+                ) : null}
+                <div 
+                  className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 items-center justify-center text-white font-medium text-xs md:text-sm border-2 border-white shadow-sm"
+                  style={{ display: userPhoto ? 'none' : 'flex' }}
+                >
+                  {getInitials(userName)}
+                </div>
               </NavLink>
               {/* Sign Out Icon */}
               <button onClick={() => setShowLogoutConfirm(true)} className="flex flex-col items-center justify-center px-2 py-1 rounded-full bg-gray-900 text-white">
                 <ArrowRightOnRectangleIcon className="w-5 h-5" />
               </button>
             </div>
-            {/* Mobile navigation row - visible only on mobile */}
-            <div className="flex md:hidden flex-1 items-center justify-end gap-2">
+            {/* Mobile/Tablet navigation row - visible on mobile and tablet, hidden on large screens */}
+            <div className="flex lg:hidden flex-1 items-center justify-end gap-2">
+              {/* Install App Button - Mobile/Tablet */}
+              {canInstall && !isStandalone && (
+                <button
+                  onClick={handleInstallClick}
+                  className="flex items-center gap-1 px-2 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
+                  title="Install App"
+                >
+                  <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
               <LocationBadge />
               {/* Profile Icon for mobile */}
               <NavLink 
@@ -317,13 +502,20 @@ export default function Navbar() {
                   <img 
                     src={userPhoto} 
                     alt={userName} 
-                    className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm"
+                    className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm bg-zinc-100"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
                   />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-xs border-2 border-white shadow-sm">
-                    {getInitials(userName)}
-                  </div>
-                )}
+                ) : null}
+                <div 
+                  className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 items-center justify-center text-white font-medium text-xs border-2 border-white shadow-sm"
+                  style={{ display: userPhoto ? 'none' : 'flex' }}
+                >
+                  {getInitials(userName)}
+                </div>
               </NavLink>
               <button onClick={() => setShowLogoutConfirm(true)} className="flex items-center px-2 py-1 rounded-full bg-gray-900 text-white">
                 <ArrowRightOnRectangleIcon className="w-5 h-5" />
@@ -351,6 +543,38 @@ export default function Navbar() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* iOS Install Instructions popup */}
+      {showIOSInstructions && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl p-6 max-w-sm w-full text-center mx-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ArrowDownTrayIcon className="w-6 h-6 text-blue-600" />
+            </div>
+            <h2 className="text-lg font-semibold mb-2 text-zinc-800">Install Travel With Us</h2>
+            <p className="text-sm text-gray-600 mb-4">To install this app on your iPhone/iPad:</p>
+            <ol className="text-left text-sm text-gray-700 space-y-2 mb-4">
+              <li className="flex items-start gap-2">
+                <span className="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">1</span>
+                <span>Tap the <strong>Share</strong> button at the bottom of Safari</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">2</span>
+                <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-blue-100 text-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0">3</span>
+                <span>Tap <strong>"Add"</strong> in the top right corner</span>
+              </li>
+            </ol>
+            <button
+              onClick={() => setShowIOSInstructions(false)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow hover:bg-blue-700 transition-colors w-full"
+            >
+              Got it!
+            </button>
           </div>
         </div>
       )}

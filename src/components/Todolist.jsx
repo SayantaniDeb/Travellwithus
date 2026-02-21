@@ -3,7 +3,6 @@ import React, { useRef, useState, useEffect } from 'react'
 import Navbar from './Navbar'
 import { BsTrash } from "react-icons/bs";
 import logo4 from '../img/5.gif'
-import Bottom from './bottomfoot';
 import { db, auth } from '../Firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
@@ -215,11 +214,21 @@ function Todolist() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pb-16 sm:pb-0">
+    <div className="min-h-screen flex flex-col relative">
+      {/* Fixed Background Image */}
+      <div className="fixed inset-0 z-0">
+        <img 
+          src={logo4} 
+          className="w-full h-full object-cover opacity-30" 
+          alt="Background"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-white/50 to-white/70"></div>
+      </div>
+
       <Navbar />
       
-      {/* Main content */}
-      <div className="flex-1 px-3 sm:px-4 md:px-6 lg:px-8 mt-16 sm:mt-20 pb-20 sm:pb-24">
+      {/* Main content - positioned above background */}
+      <div className="flex-1 px-3 sm:px-4 md:px-6 lg:px-8 mt-16 sm:mt-20 pb-20 sm:pb-24 relative z-10">
         {/* Error message */}
         {error && (
           <div className="mx-auto max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-4" role="alert">
@@ -231,12 +240,12 @@ function Todolist() {
 
         {/* Not logged in message */}
         {!user && !loading && (
-          <div className="mx-auto max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mt-4" role="alert">
+          <div className="mx-auto max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-yellow-100/90 backdrop-blur-sm border border-yellow-400 text-yellow-700 px-4 py-3 rounded mt-4" role="alert">
             <span>Please log in to save your todos.</span>
           </div>
         )}
 
-        <div className="rounded-lg mx-auto max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-white shadow-lg mt-4 sm:mt-6">
+        <div className="mx-auto max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl mt-4 sm:mt-6">
           <Input handler={addToDoHandler} />
           
           {/* Loading state */}
@@ -249,31 +258,15 @@ function Todolist() {
           )}
         </div>
 
-        {/* Empty state with image */}
+        {/* Empty state message */}
         {!loading && todos.length === 0 && (
-          <div className="text-center mt-4 sm:mt-6">
-            <img 
-              src={logo4} 
-              className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg mx-auto" 
-              alt="Todo illustration"
-            />
-            <p className="text-gray-500 mt-2 text-sm sm:text-base">Add your first task above!</p>
+          <div className="text-center mt-6">
+            <div className="rounded-xl p-6 mx-auto max-w-sm">
+              <p className="text-gray-600 text-lg font-medium">Your list is empty</p>
+              <p className="text-gray-400 mt-1 text-sm">Add your first task above!</p>
+            </div>
           </div>
         )}
-
-        {/* Show image smaller when there are todos */}
-        {!loading && todos.length > 0 && (
-          <img 
-            src={logo4} 
-            className="w-32 sm:w-40 md:w-48 mx-auto mt-4 opacity-50" 
-            alt="Todo illustration"
-          />
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="hidden sm:block">
-        <Bottom />
       </div>
     </div>
   )
