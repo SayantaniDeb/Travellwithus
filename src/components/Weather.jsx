@@ -6,7 +6,8 @@ import Navbar from "./Navbar";
 import { Button } from "@material-tailwind/react";
 import { useLocation } from "../context/LocationContext";
 
-// No API key needed - using backend proxy
+// API URL from environment variable
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export const WeatherIcons = {
   "01d": "/icons/sunny.svg",
@@ -42,12 +43,15 @@ function Weather() {
         setError(null);
         try {
           const response = await axios.get(
-            `/api/weather?lat=${location.latitude}&lon=${location.longitude}`
+            `${API_URL}/api/weather?lat=${location.latitude}&lon=${location.longitude}`
           );
-          updateWeather(response.data);
+          if (response.data && response.data.main) {
+            updateWeather(response.data);
+          }
           setAutoLoaded(true);
         } catch (err) {
           console.error('Failed to fetch weather by location:', err);
+          setError('Weather service unavailable. Please try again later.');
         }
         setLoading(false);
       }
@@ -63,11 +67,15 @@ function Weather() {
     setError(null);
     try {
       const response = await axios.get(
-        `/api/weather?q=${city}`
+        `${API_URL}/api/weather?q=${city}`
       );
-      updateWeather(response.data);
+      if (response.data && response.data.main) {
+        updateWeather(response.data);
+      } else {
+        setError('City not found. Please try again.');
+      }
     } catch (err) {
-      setError('City not found. Please try again.');
+      setError('Weather service unavailable. Please try again later.');
     }
     setLoading(false);
   };

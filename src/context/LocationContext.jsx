@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const LocationContext = createContext();
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export const useLocation = () => {
   const context = useContext(LocationContext);
@@ -47,7 +48,7 @@ export const LocationProvider = ({ children }) => {
   const getLocationName = async (lat, lng) => {
     try {
       const response = await fetch(
-        `/api/geocode?lat=${lat}&lng=${lng}`
+        `${API_URL}/api/geocode?lat=${lat}&lng=${lng}`
       );
       const data = await response.json();
       if (data.features && data.features.length > 0) {

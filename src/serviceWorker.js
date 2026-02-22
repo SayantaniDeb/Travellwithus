@@ -26,6 +26,15 @@ export function register() {
         registerValidSW(swUrl);
       }
     });
+
+    // Listen for service worker messages (cache updates)
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'CACHE_UPDATED') {
+        console.log(`[App] New version available: ${event.data.version}`);
+        // Auto-reload to get new version
+        window.location.reload();
+      }
+    });
   }
 }
 
@@ -33,6 +42,10 @@ function registerValidSW(swUrl) {
   navigator.serviceWorker
     .register(swUrl)
     .then((registration) => {
+      // Check for updates immediately and every 60 seconds
+      registration.update();
+      setInterval(() => registration.update(), 60000);
+
       registration.onupdatefound = () => {
         const installingWorker = registration.installing;
         if (installingWorker == null) {
@@ -41,9 +54,12 @@ function registerValidSW(swUrl) {
         installingWorker.onstatechange = () => {
           if (installingWorker.state === 'installed') {
             if (navigator.serviceWorker.controller) {
-              // New content is available and will be used when all tabs for this page are closed.
+              // New content is available - force reload
+              console.log('[SW] New content available, reloading...');
+              window.location.reload();
             } else {
               // Content is cached for offline use.
+              console.log('[SW] Content cached for offline use.');
             }
           }
         };

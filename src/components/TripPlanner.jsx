@@ -64,6 +64,8 @@ export default function TripPlanner() {
   const [endDate, setEndDate] = useState('');
   const [sourceLocation, setSourceLocation] = useState(''); // Pickup point / source
   const [budgetAmount, setBudgetAmount] = useState('');
+  const [includeHotels, setIncludeHotels] = useState(true); // Toggle for hotel prices
+  const [includeTravel, setIncludeTravel] = useState(true); // Toggle for travel costs
   const [plan, setPlan] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -91,6 +93,8 @@ export default function TripPlanner() {
         setEndDate(parsed.endDate || '');
         setSourceLocation(parsed.sourceLocation || '');
         setBudgetAmount(parsed.budgetAmount || '');
+        setIncludeHotels(parsed.includeHotels !== false);
+        setIncludeTravel(parsed.includeTravel !== false);
         setPlan(parsed.plan || null);
         setSelectedDay(parsed.selectedDay || null);
         setCurrency(parsed.currency || 'INR');
@@ -108,12 +112,14 @@ export default function TripPlanner() {
       endDate,
       sourceLocation,
       budgetAmount,
+      includeHotels,
+      includeTravel,
       plan,
       selectedDay,
       currency
     };
     sessionStorage.setItem(cacheKey, JSON.stringify(stateToCache));
-  }, [step, startDate, endDate, sourceLocation, budgetAmount, plan, selectedDay, currency, cacheKey]);
+  }, [step, startDate, endDate, sourceLocation, budgetAmount, includeHotels, includeTravel, plan, selectedDay, currency, cacheKey]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -182,38 +188,55 @@ export default function TripPlanner() {
     const currencySymbol = CURRENCIES[currency]?.symbol || '$';
     const budgetInfo = budgetAmount ? ` Budget: ${currencySymbol}${budgetAmount}.` : '';
 
-    const prompt = `Create a ${numDays}-day travel plan for "${destination}"${sourceLocation ? ` from ${sourceLocation}` : ''}.
+    // Build optional sections based on user preferences
+    const hotelSection = includeHotels ? `
+ACCOMMODATION per night:
+- Budget hostels/guesthouses: ₹500-₹1,500
+- Mid-range hotels: ₹1,500-₹4,000
+- Good hotels: ₹4,000-₹8,000
+- Luxury/resorts: ₹8,000-₹25,000+` : '';
 
-Dates: ${startDate} to ${endDate}. Currency: ${currency} (${currencySymbol}).${budgetInfo}
-
-CRITICAL - Use REALISTIC 2024-2026 INDIAN travel prices. Consider ACTUAL distance:
-${currency === 'INR' ? `
+    const travelSection = includeTravel ? `
 TRANSPORT (based on distance):
 - Short distance (<200km): Bus ₹200-₹600, Train ₹150-₹500
 - Medium distance (200-500km): Bus ₹600-₹1,200, Train ₹400-₹1,200, Flight ₹2,500-₹5,000
 - Long distance (500km+): Bus ₹1,000-₹2,500, Train ₹800-₹2,500, Flight ₹3,500-₹12,000
 - Hill stations/Himalayas from metros: Bus ₹1,200-₹2,500 (10-15hr), Train ₹600-₹1,800, Flight ₹4,000-₹10,000
 - Volvo/AC buses cost 2-3x more than ordinary buses
-- Sleeper trains: ₹400-₹1,500, AC trains: ₹800-₹3,000
+- Sleeper trains: ₹400-₹1,500, AC trains: ₹800-₹3,000` : '';
 
-ACCOMMODATION per night:
-- Budget hostels/guesthouses: ₹500-₹1,500
-- Mid-range hotels: ₹1,500-₹4,000
-- Good hotels: ₹4,000-₹8,000
-- Luxury/resorts: ₹8,000-₹25,000+
+    const travelInfoJson = includeTravel ? `
+  "travelInfo": {
+    "from": "${sourceLocation || ''}",
+    "fromStation": "Departure airport/station name (e.g., Netaji Subhas Chandra Bose Airport (CCU) or Howrah Junction)",
+    "to": "Actual destination name",
+    "toStation": "Arrival airport/station name (e.g., Bagdogra Airport (IXB) or New Jalpaiguri (NJP))",
+    "recommendedMode": "Flight/Train/Bus",
+    "estimatedTicketCost": "${currencySymbol}XXX (MUST be realistic)",
+    "travelDuration": "X hours",
+    "tips": "Travel tip including booking advice"
+  },` : '';
+
+    const hotelInDayJson = includeHotels ? `
+      "hotel": {"name": "Hotel name", "pricePerNight": "${currencySymbol}XXX", "type": "Budget/Mid-range/Luxury"},` : '';
+
+    const prompt = `Create a ${numDays}-day travel plan for "${destination}"${sourceLocation ? ` from ${sourceLocation}` : ''}.
+
+Dates: ${startDate} to ${endDate}. Currency: ${currency} (${currencySymbol}).${budgetInfo}
+${includeHotels ? 'Include hotel recommendations with prices.' : 'Do NOT include hotel information.'}
+${includeTravel ? 'Include travel/transport costs and recommendations.' : 'Do NOT include travel/transport information.'}
+
+CRITICAL - Use REALISTIC 2024-2026 prices:
+${currency === 'INR' ? `${travelSection}${hotelSection}
 
 FOOD per day: ₹400-₹1,500 (street food to restaurants)
 ACTIVITIES: Entry fees ₹50-₹500, guides ₹500-₹2,000
 ` : currency === 'USD' ? `
-- Domestic Flights: $80-$400 one-way
-- Trains: $15-$100
-- Buses: $20-$80 (long distance)
+- Flights: $80-$400 one-way
 - Hotels: Budget $40-$100, Mid $100-$250, Luxury $300+
 - Food per day: $30-$100
 ` : `
 - Flights: €60-€350 one-way
-- Trains: €20-€150
-- Buses: €15-€80
 - Hotels: Budget €40-€100, Mid €100-€200, Luxury €250+
 - Food per day: €25-€80
 `}
@@ -223,35 +246,25 @@ IMPORTANT RULES:
    Examples: "Himalaya" → "Manali, Himachal Pradesh" or "Darjeeling, West Bengal" or "Leh, Ladakh"
    "beach" → "Goa" or "Pondicherry", "hill station" → "Shimla" or "Ooty"
 2. The "actualDestination" field MUST contain the real place name you're planning for.
-3. If traveling by FLIGHT, include the actual airport name/code (e.g., "Bagdogra Airport (IXB)", "Leh Kushok Bakula Airport (IXL)")
-4. If traveling by TRAIN, include the actual railway station name (e.g., "New Jalpaiguri (NJP)", "Kalka Railway Station")
-5. If traveling by BUS, include the bus terminal/stand name if applicable
+${includeTravel ? `3. If traveling by FLIGHT, include the actual airport name/code (e.g., "Bagdogra Airport (IXB)")
+4. If traveling by TRAIN, include the actual railway station name (e.g., "New Jalpaiguri (NJP)")
+5. If traveling by BUS, include the bus terminal/stand name if applicable` : ''}
 
 Return ONLY valid JSON:
 {
   "destination": "${destination}",
-  "actualDestination": "The REAL specific place name (e.g., if user said Himalaya, write Manali or Darjeeling)",
+  "actualDestination": "The REAL specific place name",
   "source": "${sourceLocation || ''}",
-  "summary": "Brief trip overview mentioning the actual destination",
+  "summary": "Brief trip overview",
   "currency": "${currency}",
   "currencySymbol": "${currencySymbol}",
-  "budgetAmount": ${budgetAmount || 0},
-  "travelInfo": {
-    "from": "${sourceLocation || ''}",
-    "fromStation": "Departure airport/station name (e.g., Netaji Subhas Chandra Bose Airport (CCU) or Howrah Junction)",
-    "to": "Actual destination name",
-    "toStation": "Arrival airport/station name (e.g., Bagdogra Airport (IXB) or New Jalpaiguri (NJP))",
-    "recommendedMode": "Flight/Train/Bus",
-    "estimatedTicketCost": "${currencySymbol}XXX (MUST be realistic - Kolkata to Himalayas bus is ₹1,200-₹2,500, NOT ₹500)",
-    "travelDuration": "X hours",
-    "tips": "Travel tip including booking advice"
-  },
+  "budgetAmount": ${budgetAmount || 0},${travelInfoJson}
   "days": [
     {
       "day": 1,
       "date": "${startDate}",
       "title": "Day title",
-      "summary": "Day summary",
+      "summary": "Day summary",${hotelInDayJson}
       "morning": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h"},
       "afternoon": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "3h"},
       "evening": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h"},
@@ -345,9 +358,11 @@ Generate ${numDays} days with real locations for the actual destination. Keep de
         planData.source = sourceLocation;
         planData.currency = currency;
         planData.currencySymbol = currencySymbol;
+        planData.includeHotels = includeHotels;
+        planData.includeTravel = includeTravel;
 
-        // Cost Agent: Add detailed cost breakdowns for each day
-        if (Array.isArray(planData.days)) {
+        // Cost Agent: Add detailed cost breakdowns for each day (only if budget tracking is needed)
+        if (Array.isArray(planData.days) && (includeHotels || includeTravel || budgetAmount)) {
           for (let i = 0; i < planData.days.length; i++) {
             const day = planData.days[i];
             const costPrompt = `For this day in ${destination}: ${day.title} - ${day.summary}
@@ -446,9 +461,10 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      alert('Trip saved successfully! 🎉');
       setTripSaved(true); // Mark trip as saved
-      // Stay on the current page
+      // Clear cache and redirect to saved trips
+      sessionStorage.removeItem(cacheKey);
+      navigate('/saved-trips');
       return docRef;
     } catch (err) {
       console.error('Error saving trip:', err);
@@ -618,6 +634,46 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">Currency</label>
                     <CurrencySelector className="w-full" />
+                  </div>
+                </div>
+
+                {/* Include Options - Hotel & Travel Toggles */}
+                <div className="bg-zinc-50 rounded-xl p-4 space-y-3">
+                  <p className="text-sm font-medium text-zinc-700">Include in your plan:</p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Hotel Prices Toggle */}
+                    <label className="flex items-center gap-3 flex-1 p-3 bg-white rounded-lg border border-zinc-200 cursor-pointer hover:border-blue-300 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={includeHotels}
+                        onChange={(e) => setIncludeHotels(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500"
+                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🏨</span>
+                        <div>
+                          <span className="text-sm font-medium text-zinc-800">Hotel Prices</span>
+                          <p className="text-xs text-zinc-500">Accommodation estimates</p>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Travel Costs Toggle */}
+                    <label className="flex items-center gap-3 flex-1 p-3 bg-white rounded-lg border border-zinc-200 cursor-pointer hover:border-blue-300 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={includeTravel}
+                        onChange={(e) => setIncludeTravel(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500"
+                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">✈️</span>
+                        <div>
+                          <span className="text-sm font-medium text-zinc-800">Travel Costs</span>
+                          <p className="text-xs text-zinc-500">Transport & tickets</p>
+                        </div>
+                      </div>
+                    </label>
                   </div>
                 </div>
 

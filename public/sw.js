@@ -1,7 +1,9 @@
 // Service Worker for Travel With Us PWA
-const CACHE_NAME = 'travel-with-us-v2';
-const STATIC_CACHE = 'travel-static-v2';
-const DYNAMIC_CACHE = 'travel-dynamic-v2';
+// UPDATE THIS VERSION NUMBER TO FORCE CACHE CLEAR ON DEPLOYMENT
+const APP_VERSION = 'v3.0.0';
+const CACHE_NAME = `travel-with-us-${APP_VERSION}`;
+const STATIC_CACHE = `travel-static-${APP_VERSION}`;
+const DYNAMIC_CACHE = `travel-dynamic-${APP_VERSION}`;
 
 // Static assets to cache immediately
 const STATIC_ASSETS = [
@@ -15,8 +17,9 @@ const STATIC_ASSETS = [
   '/favicon-32x32.png'
 ];
 
-// Install Service Worker
+// Install Service Worker - skip waiting to activate immediately
 self.addEventListener('install', (event) => {
+  console.log(`[SW] Installing version ${APP_VERSION}`);
   event.waitUntil(
     Promise.all([
       caches.open(STATIC_CACHE).then(cache => cache.addAll(STATIC_ASSETS)),
@@ -25,21 +28,30 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate event - clean up old caches and claim clients
+// Activate event - clean up ALL old caches and claim clients immediately
 self.addEventListener('activate', (event) => {
+  console.log(`[SW] Activating version ${APP_VERSION}`);
   event.waitUntil(
     Promise.all([
+      // Delete ALL caches that don't match current version
       caches.keys().then(cacheNames => {
         return Promise.all(
           cacheNames.map(cacheName => {
-            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE && cacheName !== CACHE_NAME) {
+            if (!cacheName.includes(APP_VERSION)) {
+              console.log(`[SW] Deleting old cache: ${cacheName}`);
               return caches.delete(cacheName);
             }
           })
         );
       }),
+      // Take control of all clients immediately
       self.clients.claim()
-    ])
+    ]).then(() => {
+      // Notify all clients to reload
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => client.postMessage({ type: 'CACHE_UPDATED', version: APP_VERSION }));
+      });
+    })
   );
 });
 
