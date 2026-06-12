@@ -9,13 +9,13 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API,
+  apiKey: "AIzaSyB3WpmcExX-G80EmpJL6TzOHSwyI2ZHOuo",
   authDomain: "travelwithus-73db1.firebaseapp.com",
   projectId: "travelwithus-73db1",
-  storageBucket: "travelwithus-73db1.appspot.com",
+  storageBucket: "travelwithus-73db1.firebasestorage.app",
   messagingSenderId: "444389048171",
-  appId: "1:444389048171:web:76704e4d54bc724f0c562e",
-  measurementId: "G-PX7KRVDCBS"
+  appId: "1:444389048171:web:b3ae60f12f3efec20c562e",
+  measurementId: "G-MYLNF9L0SS"
 };
 
 // Initialize Firebase
