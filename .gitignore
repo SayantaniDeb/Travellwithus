@@ -24,3 +24,9 @@ yarn-debug.log*
 yarn-error.log*
 .env
 dist
+
+# Private server credential files (store outside this repo where possible)
+*service-account*.json
+*firebase-adminsdk*.json
+
+__pycache__/

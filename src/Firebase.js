@@ -1,30 +1,41 @@
 // Firebase configuration and initialization
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
+import { getAuth, onAuthStateChanged as observeAuthState, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // Firebase configuration
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API,
-  authDomain: "travelwithus-73db1.firebaseapp.com",
-  projectId: "travelwithus-73db1",
-  storageBucket: "travelwithus-73db1.appspot.com",
-  messagingSenderId: "123456789012", // You'll need to get this from Firebase console
-  appId: "1:123456789012:web:abcdef123456" // You'll need to get this from Firebase console
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "travelwithus-73db1.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "travelwithus-73db1",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "travelwithus-73db1.appspot.com",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase only if it hasn't been initialized already
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const app = firebaseConfig.apiKey
+  ? (getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0])
+  : null;
 
 // Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
+export const auth = app ? getAuth(app) : null;
+
+// Keep public pages usable when local Firebase credentials are absent.
+export function onAuthStateChanged(authInstance, callback, ...options) {
+  if (!authInstance) {
+    callback(null);
+    return () => {};
+  }
+  return observeAuthState(authInstance, callback, ...options);
+}
 
 // Initialize Firestore
-export const db = getFirestore(app);
+export const db = app ? getFirestore(app) : null;
 
 // Initialize Firebase Storage
-export const storage = getStorage(app);
+export const storage = app ? getStorage(app) : null;
 
 // Google Auth Provider
 export const provider = new GoogleAuthProvider();

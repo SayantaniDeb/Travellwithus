@@ -251,3 +251,266 @@ body {
     overflow: hidden;
   }
 }
+/* Large touch targets and a visible filled track for trip planning controls. */
+.trip-setup-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 36px;
+  background: transparent;
+  touch-action: pan-y;
+}
+.trip-setup-slider::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #2563eb var(--slider-progress), #e2e8f0 var(--slider-progress));
+}
+.trip-setup-slider::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+.trip-setup-slider::-moz-range-progress { height: 5px; border-radius: 999px; background: #2563eb; }
+.trip-setup-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8.5px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: #2563eb;
+  box-shadow: 0 0 0 1px #cbd5e1, 0 2px 5px #0f172a20;
+}
+.trip-setup-slider::-moz-range-thumb {
+  width: 16px; height: 16px; border: 3px solid white; border-radius: 50%;
+  background: #2563eb; box-shadow: 0 0 0 1px #cbd5e1;
+}
+.trip-setup-slider:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 8px; }
+.trip-date-picker::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Shared night palette for existing utility-based pages and future dark variants. */
+html.dark { color-scheme: dark; background: #0b1220; color: #e2e8f0; }
+html.dark body, html.dark #root { background: #0b1220; color: #e2e8f0; }
+html.dark :is(.bg-white, [class*="bg-white/"], dialog) { background-color: #121d2f !important; }
+html.dark :is(.bg-slate-50,.bg-zinc-50,.bg-gray-50,.bg-slate-100,.bg-zinc-100,.bg-gray-100) { background-color: #19263a !important; }
+html.dark :is([class*="from-zinc-50"],[class*="from-zinc-100"],[class*="from-slate-50"],[class*="from-white"]) { background-image: none !important; background-color: #0b1220 !important; }
+html.dark :is(.text-black,.text-slate-950,.text-slate-900,.text-slate-800,.text-zinc-950,.text-zinc-900,.text-zinc-800,.text-gray-900,.text-gray-800) { color: #f1f5f9 !important; }
+html.dark :is(.text-slate-700,.text-slate-600,.text-zinc-700,.text-zinc-600,.text-gray-700,.text-gray-600) { color: #cbd5e1 !important; }
+html.dark :is(.text-slate-500,.text-slate-400,.text-zinc-500,.text-zinc-400,.text-gray-500,.text-gray-400) { color: #94a3b8 !important; }
+html.dark :is([class*="border-slate-"],[class*="border-zinc-"],[class*="border-gray-"],[class*="divide-slate-"] > :not([hidden]) ~ :not([hidden])) { border-color: #2b3b53 !important; }
+html.dark :is([class*="bg-blue-50"],.bg-blue-100,[class*="from-blue-50"]) { background-color: #142d4c !important; background-image: none; }
+html.dark :is([class*="bg-violet-50"],.bg-violet-100,.bg-purple-50,[class*="from-purple-50"],[class*="from-indigo-50"]) { background-color: #292044 !important; background-image: none; }
+html.dark :is(.text-blue-900,.text-blue-800,.text-blue-700,.text-blue-600) { color: #93c5fd !important; }
+html.dark :is(.text-violet-700,.text-violet-600,.text-purple-700,.text-purple-600) { color: #c4b5fd !important; }
+html.dark :is(.bg-amber-50,.bg-yellow-50,.bg-yellow-100,[class*="from-amber-50"]) { background-color: #342816 !important; background-image: none; }
+html.dark :is(.text-amber-950,.text-amber-900,.text-amber-800,.text-amber-700,.text-yellow-700) { color: #fcd34d !important; }
+html.dark :is(.bg-emerald-50,.bg-green-50,.bg-green-100) { background-color: #12352e !important; }
+html.dark :is(.text-emerald-700,.text-emerald-600,.text-green-800,.text-green-700,.text-green-600) { color: #6ee7b7 !important; }
+html.dark :is(.bg-red-50,.bg-red-100) { background-color: #3b202b !important; }
+html.dark :is(.text-red-800,.text-red-700,.text-red-600) { color: #fda4af !important; }
+html.dark :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea,select) { background-color: #0f192a !important; color: #e2e8f0 !important; border-color: #3a4d69 !important; }
+html.dark :is(input,textarea)::placeholder { color: #94a3b8; }
+html.dark :is(.hover\:bg-slate-50:hover,.hover\:bg-slate-100:hover,.hover\:bg-zinc-100:hover,.hover\:bg-gray-50:hover,.hover\:bg-gray-100:hover) { background-color: #26364c !important; }
+html.dark :is(.shadow-xl,.shadow-lg,.shadow-md) { --tw-shadow-color: #0005; }
+
+/* Page canvas follows the same theme as its navigation and cards. */
+:root { --trip-page-background: #f6f7f9; }
+html.dark { --trip-page-background: #0b1220; }
+.trip-page-background { background-color: var(--trip-page-background); }
+
+/* Welcome search section must not retain a light gradient at night. */
+.welcome-planning-section { background: linear-gradient(to bottom, #f9fafb, #ffffff); }
+html.dark .welcome-planning-section { background: linear-gradient(to bottom, #0b1220, #111d30); color: #e2e8f0; }
+
+html.dark .welcome-feature-card:is(:hover, :focus-within, :active) {
+  border-color: #568bd1 !important;
+  box-shadow: 0 0 0 1px rgb(96 165 250 / 18%), 0 10px 28px -8px rgb(59 130 246 / 34%), 0 3px 10px rgb(0 0 0 / 24%) !important;
+}
+
+html.dark .todo-illustration { opacity: 0.07; }
+#destination-search { scroll-margin-top: 6rem; }
+
+.welcome-hero { background: linear-gradient(120deg, #eff6ff, #f8fafc 50%, #f5f3ff); }
+html.dark .welcome-hero { background: linear-gradient(120deg, #0c182b, #0b1220 50%, #19152d); }
+.welcome-hero .welcome-planning-section, html.dark .welcome-hero .welcome-planning-section { background: transparent; }
+.welcome-hero .welcome-planning-section { padding-top: clamp(5rem, 10vw, 8rem); padding-bottom: clamp(5rem, 10vw, 8rem); }
+
+.welcome-hero { --hero-sky-top: #bdeaff; --hero-sky-bottom: #fff1d7; --hero-clear: #f8fbff; }
+html.dark .welcome-hero { --hero-sky-top: #152a48; --hero-sky-bottom: #26304c; --hero-clear: #0b1526; }
+
+/* Keep the form in the sky and the transport scene in its own lower band. */
+.welcome-hero .welcome-planning-section { min-height: calc(100vh - 64px); min-height: calc(100dvh - 64px); padding-top: clamp(6rem, 11vw, 10rem); padding-bottom: 280px; }
+@media (max-width: 639px) {
+  .welcome-hero .welcome-planning-section { min-height: calc(100vh - 56px); min-height: calc(100dvh - 56px); padding-top: 5rem; padding-bottom: 250px; }
+}
+
+@keyframes tour-icon-enter { from { opacity: 0; transform: translateY(5px) scale(.9); } to { opacity: 1; transform: none; } }
+.tour-feature-icon { animation: tour-icon-enter 220ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .tour-feature-icon { animation: none; } }
+
+.feature-showcase { --feature-ink: #17243a; --feature-muted: #64748b; --feature-panel: #ffffff; --feature-border: #dbe5ef; --feature-highlight: #e5efff; }
+html.dark .feature-showcase { --feature-ink: #e2e8f0; --feature-muted: #94a3b8; --feature-panel: #15233a; --feature-border: #2a3b54; --feature-highlight: #213b62; }
+.feature-animation-stage { background: radial-gradient(ellipse at center, rgb(96 165 250 / 10%), transparent 72%); }
+
+/* Fit the complete interactive scene beneath its feature tabs, including short screens. */
+.feature-tour-section { scroll-margin-top: 72px; }
+.feature-tour-responsive { width: min(100%, 768px, max(280px, calc((100dvh - 390px) * 8 / 7))); }
+@media (min-width: 640px) {
+  .feature-tour-responsive { width: min(100%, 768px, max(300px, calc((100dvh - 330px) * 8 / 7))); }
+}
+@media (max-height: 600px) and (min-width: 640px) {
+  .feature-tour-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .feature-tour-section { padding-block: 12px; }
+}
+
+.journey-return-header { background-color: #ede9fe; color: #4c1d95; box-shadow: none; }
+html.dark .journey-return-header { background-color: #352351; color: #ede9fe; }
+
+/* Reserve tour layout before importing the player to avoid shifting the next section. */
+.feature-tour-reserved { min-height: calc(min(100vw - 32px, 768px, max(280px, (100dvh - 390px) * 8 / 7)) * 7 / 8 + 300px); }
+@media (min-width:640px) { .feature-tour-reserved { min-height: calc(min(100vw - 48px, 768px, max(300px, (100dvh - 330px) * 8 / 7)) * 7 / 8 + 190px); } }
+
+.feature-static-card { box-shadow: 0 28px 48px -14px rgb(15 23 42 / 35%), 0 10px 20px -5px rgb(15 23 42 / 18%), 0 0 0 1px rgb(148 163 184 / 12%); }
+.feature-static-card-right { transform: rotate(3deg); }
+.feature-static-card-left { transform: rotate(-3deg); }
+html.dark .feature-static-card { box-shadow: 0 30px 50px -12px rgb(0 0 0 / 80%), 0 12px 24px -4px rgb(0 0 0 / 50%), 0 0 0 1px rgb(148 163 184 / 25%); }
+@media (max-width:639px) { .feature-static-card-right { transform: rotate(2deg); } .feature-static-card-left { transform: rotate(-2deg); } }
+
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+.lazy-itinerary-card { min-height: 420px; }
+.lazy-itinerary-card > :first-child { height: 100%; }
+.flight-loader { position: relative; display: inline-block; width: 64px; height: 64px; flex-shrink: 0; border: 2px dashed rgb(96 165 250 / 45%); border-radius: 50%; }
+.flight-loader-orbit { position: absolute; inset: -2px; animation: flight-loader-turn 2.2s linear infinite; }
+.flight-loader-plane { position: absolute; top: -9px; left: calc(50% - 11px); width: 22px; height: 22px; color: #2563eb; fill: #dbeafe; transform: rotate(45deg); filter: drop-shadow(0 2px 3px rgb(37 99 235 / 25%)); }
+.flight-loader-small { width: 28px; height: 28px; }
+.flight-loader-small .flight-loader-plane { width: 15px; height: 15px; top: -6px; left: calc(50% - 7px); }
+html.dark .flight-loader-plane { color: #93c5fd; fill: #1e3a5f; }
+@keyframes flight-loader-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .flight-loader-orbit { animation: none; } }
+
+
+/* Static route artwork keeps the trip setup lightweight and readable. */
+.trip-setup-background {
+  background-image: url('/planner-route.svg');
+  background-repeat: no-repeat;
+  background-position: center 80px;
+  background-size: 100% calc(100% - 80px);
+}
+html.dark .trip-setup-background {
+  background-image: url('/planner-route-dark.svg');
+  background-blend-mode: normal;
+}
+@media (max-width: 639px) {
+  .trip-setup-background {
+    background-size: auto 100%;
+  }
+}
+
+.saved-trips-background {
+  background-image: url('/saved-trips-icons.svg');
+  background-position: center 80px;
+  background-repeat: repeat-y;
+  background-size: max(100%, 1100px) auto;
+}
+html.dark .saved-trips-background { background-blend-mode: normal; }
+
+.community-background {
+  background-image: url('/community-pattern.svg');
+  background-position: center 80px;
+  background-repeat: repeat-y;
+  background-size: max(100%, 1100px) auto;
+}
+html.dark .community-background {
+  background-image: url('/community-pattern-dark.svg');
+  background-blend-mode: normal;
+}
+
+.stays-background {
+  background-image: url('/stays-icons.svg');
+  background-position: center 80px;
+  background-repeat: repeat-y;
+  background-size: max(100%, 1100px) auto;
+}
+html.dark .stays-background { background-blend-mode: normal; }
+
+.budget-background {
+  background-image: url('/budget-pattern.svg');
+  background-position: center 80px;
+  background-repeat: repeat-y;
+  background-size: max(100%, 1100px) auto;
+}
+html.dark .budget-background { background-blend-mode: normal; }
+
+.itinerary-background {
+  background-image: url('/itinerary-route.svg');
+  background-position: center 80px;
+  background-repeat: repeat-y;
+  background-size: 100% auto;
+}
+html.dark .itinerary-background {
+  background-image: url('/itinerary-route-dark.svg');
+}
+
+.trip-setup input.trip-budget-amount {
+  font-size: 2.25rem !important;
+  line-height: 1.2;
+  -moz-appearance: textfield;
+}
+.trip-budget-amount::-webkit-inner-spin-button,
+.trip-budget-amount::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.travel-day-highlight {
+  background-color: #fffbeb !important;
+  border-color: #fbbf24 !important;
+  box-shadow: 0 3px 12px rgb(245 158 11 / 10%);
+}
+html.dark .travel-day-highlight {
+  background-color: #302714 !important;
+  border-color: #b88927 !important;
+}
+
+
+.nav-feature-active {
+  box-shadow: 0 5px 12px -3px rgb(15 23 42 / 35%), 0 2px 4px rgb(15 23 42 / 15%);
+}
+html.dark .nav-feature-active {
+  box-shadow: 0 5px 14px rgb(0 0 0 / 45%), 0 0 0 1px rgb(147 197 253 / 20%);
+}
+
+.plan-trip-button {
+  background-image: linear-gradient(110deg, #2563eb, #6d28d9);
+  color: #fff;
+  box-shadow: 0 4px 12px rgb(79 70 229 / 25%);
+}
+.plan-trip-button:hover { background-image: linear-gradient(110deg, #1d4ed8, #5b21b6); }
+html.dark .plan-trip-button {
+  background-image: linear-gradient(110deg, #60a5fa, #a78bfa);
+  color: #0b1220 !important;
+  box-shadow: 0 4px 16px rgb(96 165 250 / 25%);
+}
+html.dark .plan-trip-button:hover { background-image: linear-gradient(110deg, #93c5fd, #c4b5fd); }
+
+.trip-date-picker { color-scheme: light; }
+html.dark .trip-date-picker { color-scheme: dark; }
+html.dark .trip-date-control:hover,
+html.dark .trip-date-control:focus-within {
+  background-color: #1c304b !important;
+}
+html.dark .trip-date-control:focus-within {
+  --tw-ring-color: #60a5fa;
+}
+
+.hero-night-moon { display: none; }
+html.dark .hero-day-sun { display: none; }
+html.dark .hero-night-moon { display: inline; }

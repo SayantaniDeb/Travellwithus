@@ -1,3 +1,5 @@
+import BackButton from './BackButton';
+import ThemeToggle from './ThemeToggle';
 import React, { useEffect, useState } from 'react';
 import { auth, provider, db } from '../Firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
@@ -66,6 +68,7 @@ function LoginForm() {
 
   // Check for redirect result on component mount
   useEffect(() => {
+    if (!auth) return;
     getRedirectResult(auth)
       .then(async (result) => {
         if (result?.user) {
@@ -311,23 +314,29 @@ function LoginForm() {
     }
   }, []);
 
+  if (!auth) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="fixed right-4 top-4 z-50"><ThemeToggle /></div>
+        <div className="max-w-md rounded-2xl bg-white p-8 shadow-lg text-center">
+          <h1 className="text-2xl font-bold mb-4">Sign-in is unavailable</h1>
+          <p className="text-gray-600 mb-6">Firebase is not configured for this local preview. You can still explore the travel dashboard.</p>
+          <button className="rounded-lg bg-blue-600 px-5 py-3 text-white" onClick={() => navigate('/home')}>Explore dashboard</button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="relative overflow-hidden flex items-center justify-center" style={{ minHeight: 'calc(var(--vh, 1vh) * 100)' }}>
+      <div className="fixed right-4 top-4 z-50"><ThemeToggle /></div>
       {/* Login Card */}
       <div className="z-10 w-[95%] max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg mx-auto px-3 sm:px-4">
         <div className="bg-white/80 backdrop-blur-md shadow-2xl rounded-2xl sm:rounded-3xl px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 border border-white/30">
           <div className="text-center">
             {/* Back Button */}
             <div className="flex justify-start mb-3 sm:mb-4">
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center text-gray-600 hover:text-gray-800 transition-colors duration-200 py-1 px-2 -ml-2 rounded-md hover:bg-gray-100 active:bg-gray-200"
-              >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                <span className="text-xs sm:text-sm font-medium">Back</span>
-              </button>
+              <BackButton onClick={() => navigate('/')}>Back</BackButton>
             </div>
 
             <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-800 mb-3 sm:mb-4 md:mb-6 leading-tight">

@@ -1,6 +1,16 @@
+import BackButton from './BackButton';
+import { plannerReturnPath } from '../utils/tripNavigation';
+import { readPlanningResponse } from '../utils/planningResponse';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
+import Shortlist from './Shortlist';
+import { toggleSavedStay } from '../utils/savedStays';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged } from '../Firebase';
+import DestinationAutocomplete from './DestinationAutocomplete';
+import { stayContext } from '../utils/stayContext';
+import { savedTripPath } from '../utils/tripNavigation';
 import { auth, db } from '../Firebase';
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline';
@@ -591,7 +601,8 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Helper function to call AI via backend proxy
 const callAI = async (model, prompt, maxTokens = 8000) => {
-  const response = await fetch(`${API_URL}/api/completions`, {
+  let response;
+  try { response = await fetch(`${API_URL}/api/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -606,11 +617,11 @@ const callAI = async (model, prompt, maxTokens = 8000) => {
       temperature: 0.7,
       provider: LLM_PROVIDER
     })
-  });
-
-  const data = await response.json();
-  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-  return data.choices?.[0]?.message?.content;
+  }); } catch { throw new Error('Hotel search could not reach the planning server. Please retry in a moment. Your search details are kept.'); }
+  try { return await readPlanningResponse(response); } catch (error) {
+    if (error.message.includes('planning server did not return')) throw new Error('Hotel search received an empty or invalid server response. Please retry. Your search details are kept.');
+    throw error;
+  }
 };
 
 export default function HotelSearch() {
@@ -622,101 +633,73 @@ export default function HotelSearch() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  useEffect(() => { setError(null); }, [location, checkIn, checkOut, budget, currency]);
   const [shortlistedHotels, setShortlistedHotels] = useState(new Set());
   const navigate = useNavigate();
   const locationState = useLocation();
-
-  // Initialize form with trip data from navigation state
+  const [showSaved, setShowSaved] = useState(new URLSearchParams(window.location.search).has("saved"));
+  const [linkedTrip, setLinkedTrip] = useState(null);
+  const [availableTrips, setAvailableTrips] = useState([]);
   useEffect(() => {
-    if (locationState.state?.tripData) {
-      const tripData = locationState.state.tripData;
-      const currencyFromState = locationState.state.currency || 'INR';
-      
-      setLocation(tripData.destination || '');
-      setCurrency(currencyFromState);
-      
-      // Set budget based on trip data or state
-      if (locationState.state.budgetAmount) {
-        setBudget(locationState.state.budgetAmount.toString());
-      }
-      
-      // Set dates if available in trip data
-      if (tripData.startDate) {
-        setCheckIn(tripData.startDate);
-      }
-      if (tripData.endDate) {
-        setCheckOut(tripData.endDate);
-      }
+    let stop = () => {};
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      stop(); setAvailableTrips([]);
+      if (user) stop = onSnapshot(collection(db, 'users', user.uid, 'trips'), snapshot => setAvailableTrips(snapshot.docs.map(record => ({ ...record.data(), id: record.id }))), () => {});
+    });
+    return () => { stop(); unsubscribe(); };
+  }, []);
+  useEffect(() => { setShowSaved(new URLSearchParams(locationState.search).has('saved')); }, [locationState.search]);
+
+  const returnToItinerary = () => {
+    if (!linkedTrip) { navigate('/home'); return; }
+    if (linkedTrip.id) { navigate(savedTripPath(linkedTrip.id)); return; }
+    navigate(plannerReturnPath(linkedTrip), { state: { resumePlan: linkedTrip } });
+  };
+
+  // Keep planner accommodation choices connected across tabs and page reloads.
+  useEffect(() => {
+    let tripData = locationState.state?.tripData;
+    if (!tripData) {
+      try { tripData = JSON.parse(sessionStorage.getItem('staysTripContext') || 'null'); } catch { /* Start with a standalone search. */ }
     }
+    if (!tripData) return;
+    const context = stayContext(tripData);
+    setLinkedTrip(tripData);
+    setLocation(context.destination);
+    setCurrency(context.currency);
+    setCheckIn(context.checkIn);
+    setCheckOut(context.checkOut);
+    setBudget(context.perNightBudget);
+    sessionStorage.setItem('staysTripContext', JSON.stringify(tripData));
   }, [locationState.state]);
 
-  // Load shortlisted hotels for the current user
   useEffect(() => {
-    const loadShortlistedHotels = async () => {
-      if (auth.currentUser) {
-        try {
-          const userDocRef = doc(db, 'user_shortlists', auth.currentUser.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setShortlistedHotels(new Set(data.hotels || []));
-          }
-        } catch (error) {
-          console.error('Error loading shortlisted hotels:', error);
-        }
-      }
-    };
-    loadShortlistedHotels();
+    let stop = () => {};
+    const authStop = onAuthStateChanged(auth, user => {
+      stop(); setShortlistedHotels(new Set());
+      if (user) stop = onSnapshot(doc(db, 'user_shortlists', user.uid), snapshot => setShortlistedHotels(new Set(snapshot.data()?.hotels || [])), () => setError('Could not load saved hotels.'));
+    });
+    return () => { stop(); authStop(); };
   }, []);
+  const hotelKey = hotel => `${linkedTrip?.id || 'general'}::${hotel.name}-${hotel.price}`;
 
   // Function to toggle hotel shortlisting
   const toggleShortlist = async (hotel) => {
-    if (!auth.currentUser) {
+    if (!auth?.currentUser) {
       alert('Please sign in to shortlist hotels');
       return;
     }
 
-    const hotelId = `${hotel.name}-${hotel.price}`;
-    const isShortlisted = shortlistedHotels.has(hotelId);
-    
-    try {
-      const userDocRef = doc(db, 'user_shortlists', auth.currentUser.uid);
-      
-      if (isShortlisted) {
-        // Remove from shortlist
-        await updateDoc(userDocRef, {
-          hotels: arrayRemove(hotelId)
-        });
-        setShortlistedHotels(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(hotelId);
-          return newSet;
-        });
-      } else {
-        // Add to shortlist
-        const hotelData = {
-          id: hotelId,
-          name: hotel.name,
-          price: hotel.price,
-          rating: hotel.rating,
-          amenities: hotel.amenities,
-          location: location,
-          budgetRelevance: hotel.budgetRelevance,
-          bookingLink: hotel.bookingLink,
-          dateAdded: new Date().toISOString()
-        };
-        
-        await setDoc(userDocRef, {
-          hotels: arrayUnion(hotelId),
-          hotelDetails: arrayUnion(hotelData)
-        }, { merge: true });
-        
-        setShortlistedHotels(prev => new Set([...prev, hotelId]));
-      }
-    } catch (error) {
-      console.error('Error updating shortlist:', error);
-      alert('Failed to update shortlist. Please try again.');
-    }
+    const hotelData = JSON.parse(JSON.stringify({
+      ...hotel, id: hotelKey(hotel), location,
+      tripId: linkedTrip?.id || null,
+      tripName: linkedTrip?.actualDestination || linkedTrip?.destination || null,
+      tripDates: linkedTrip ? `${linkedTrip.startDate || ''} – ${linkedTrip.endDate || ''}` : null,
+      dateAdded: new Date().toISOString()
+    }));
+    try { await toggleSavedStay(auth.currentUser.uid, hotelData); }
+    catch (err) { setError(err.message); }
+
   };
 
   const currencies = {
@@ -949,23 +932,26 @@ Return ONLY valid JSON:
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
-      <Navbar />
+    <div className="min-h-screen trip-page-background stays-background">
+      <Navbar onBack={returnToItinerary} backLabel={linkedTrip ? 'Back to itinerary' : 'Back to Explore'} />
       <div className="pt-20 sm:pt-24 pb-24 px-4">
         <div className="max-w-2xl mx-auto">
-          {/* Back button */}
-          <button 
-            onClick={() => navigate('/saved-trips')}
-            className="inline-flex items-center gap-2 text-zinc-600 hover:text-zinc-900 text-sm mb-6 transition-all hover:-translate-x-0.5"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Saved Trips
-          </button>
+          <div className="mb-4 flex items-center justify-between gap-3"><h1 className="text-2xl font-bold">Stays</h1><button type="button" aria-expanded={showSaved} onClick={() => setShowSaved(value => !value)} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium"><span aria-hidden="true">{showSaved?'‹':<HeartOutlineIcon className="h-5 w-5" />}</span>{showSaved ? 'Back to hotel search' : 'Saved hotels'}</button></div>
+          {showSaved && <Shortlist embedded trip={linkedTrip} tripId={linkedTrip?.id} onBrowse={() => setShowSaved(false)} onRemoved={id => setShortlistedHotels(prev => { const next = new Set(prev); next.delete(id); return next; })} />}
+          <div hidden={showSaved}>
+          <label className="mb-4 block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium">Save hotels for trip<select value={linkedTrip?.id || ''} onChange={event => { const target = availableTrips.find(item => item.id === event.target.value); if (target) navigate('/hotels', { state: { tripData: target } }); else { setLinkedTrip(null); sessionStorage.removeItem('staysTripContext'); } }} className="mt-2 block w-full rounded-lg border border-slate-300 bg-white p-3"><option value="">Separate search · assign favorites later</option>{availableTrips.map(item => <option key={item.id} value={item.id}>{item.actualDestination || item.destination} · {item.startDate || ''} – {item.endDate || ''}</option>)}</select></label>
+          {linkedTrip && <section className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-blue-900">Stays for {linkedTrip.actualDestination || linkedTrip.destination}</h2><button type="button" className="text-xs font-medium text-blue-700 underline" onClick={() => { setLinkedTrip(null); sessionStorage.removeItem('staysTripContext'); setLocation(''); setCheckIn(''); setCheckOut(''); setBudget(''); }}>Start a separate search</button></div>
+            {!linkedTrip.id && <p className="mt-2 text-xs text-amber-800">Save your itinerary first to group hotel favorites under that trip. Until then, favorites go into Other saved hotels.</p>}
+            <p className="mt-2 text-xs text-slate-600">Your itinerary dates are prefilled below. Adjust check-in and check-out to match your actual arrival and departure. The nightly budget uses hotel estimates when available.</p>
+            <p className="mt-3 text-sm font-semibold text-blue-900">Itinerary dates: {stayContext(linkedTrip).checkIn || 'Not set'} → {stayContext(linkedTrip).checkOut || 'Not set'}</p>
+            {stayContext(linkedTrip).nights === 0 && <p className="mt-2 text-xs text-amber-800">This itinerary has no overnight date range. Choose a later check-out if you need an overnight stay.</p>}
+            {stayContext(linkedTrip).recommendations.length > 0 && <div className="mt-3 border-t border-blue-100 pt-3"><p className="text-xs font-semibold text-slate-700">Accommodation suggested in your plan · unverified estimates</p><ul className="mt-2 space-y-1 text-xs text-slate-600">{stayContext(linkedTrip).recommendations.map(hotel => <li key={hotel.name}>{hotel.name}{hotel.pricePerNight ? ` · ${hotel.pricePerNight} / night` : ''}</li>)}</ul></div>}
+            <BackButton className="mt-3" onClick={returnToItinerary}>Back to this itinerary</BackButton>
+          </section>}
 
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl p-6 mb-6">
-            <h1 className="text-2xl font-bold text-zinc-900 mb-6">Find Hotels</h1>
+            <h1 className="text-2xl font-bold text-zinc-900 mb-6">Find stays</h1>
 
             {error && (
               <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm mb-4">
@@ -976,13 +962,13 @@ Return ONLY valid JSON:
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Location</label>
-                <input
+                <div className="relative"><DestinationAutocomplete
                   type="text"
                   value={location}
-                  onChange={(e) => setLocation(e.target.value)}
+                  onChange={setLocation}
                   placeholder="e.g., Goa, India"
                   className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
+                /></div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1047,7 +1033,7 @@ Return ONLY valid JSON:
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-zinc-900">Hotel Options (Sorted by Budget Match)</h2>
               {results.map((hotel, i) => {
-                const hotelId = `${hotel.name}-${hotel.price}`;
+                const hotelId = hotelKey(hotel);
                 const isShortlisted = shortlistedHotels.has(hotelId);
                 
                 return (
@@ -1097,7 +1083,7 @@ Return ONLY valid JSON:
                         </a>
                       )}
                       <button
-                        onClick={() => navigate('/shortlist')}
+                        onClick={() => setShowSaved(true)}
                         className="inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
                       >
                         View Shortlist
@@ -1117,6 +1103,7 @@ Return ONLY valid JSON:
               </p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

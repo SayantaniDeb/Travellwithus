@@ -1,0 +1,22 @@
+// Merge this match into your existing /databases/{database}/documents scope.
+// REMOVE any overlapping rule that grants broader writes to community_posts.
+match /community_posts/{postId} {
+  allow read: if request.auth != null;
+  // Client text/poll posts cannot contain media or forge a moderation verdict.
+  allow create: if request.auth != null
+    && request.resource.data.authorId == request.auth.uid
+    && request.resource.data.keys().hasOnly([
+      'content', 'authorId', 'authorName', 'authorPhoto', 'createdAt', 'likes', 'replies', 'poll'
+    ]);
+  // Existing reactions, replies and poll voting cannot replace photo fields.
+  allow update: if request.auth != null
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'replies', 'poll']);
+  // Photo deletion goes through the server to remove the stored file too.
+  allow delete: if request.auth != null
+    && resource.data.authorId == request.auth.uid
+    && !resource.data.keys().hasAny(['media']);
+}
+match /community_image_reports/{reportId} {
+  // Server/admin writes and reviews only.
+  allow read, write: if false;
+}

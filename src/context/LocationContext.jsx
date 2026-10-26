@@ -100,6 +100,7 @@ export const LocationProvider = ({ children }) => {
       const name = await getLocationName(newLocation.latitude, newLocation.longitude);
       setLocationName(name);
       localStorage.setItem('userLocationName', name);
+      return name;
 
     } catch (err) {
       console.error('Error getting location:', err);

@@ -1,0 +1,18 @@
+{
+  "url": "http://127.0.0.1:4173/home",
+  "fetchTime": "2026-10-26T18:11:38.697Z",
+  "lighthouseVersion": "12.8.2",
+  "environment": "mobile",
+  "scores": {
+    "performance": 47,
+    "accessibility": 100,
+    "best-practices": 100,
+    "seo": 100
+  },
+  "metrics": {
+    "first-contentful-paint": "3.4 s",
+    "largest-contentful-paint": "4.8 s",
+    "total-blocking-time": "2,160 ms",
+    "cumulative-layout-shift": "0.001"
+  }
+}

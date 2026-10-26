@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Navbar from './Navbar';
 import { db, auth, storage } from '../Firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from '../Firebase';
 import { 
   doc, 
   getDoc, 

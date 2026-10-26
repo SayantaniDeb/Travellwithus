@@ -157,6 +157,14 @@ class AIRouter:
                 )
                 llm_latency_ms = (time.time() - llm_start) * 1000
                 
+                # A successful HTTP status can still contain no final answer
+                # (for example, when reasoning consumed the output budget).
+                if not isinstance(response.content, str) or not response.content.strip():
+                    raise LLMProviderError('Provider returned an empty answer', provider=provider.provider_name, model=model_config.name)
+                choices = (response.raw_response or {}).get('choices') or []
+                if choices and choices[0].get('finish_reason') == 'length':
+                    raise LLMProviderError('Provider output was truncated', provider=provider.provider_name, model=model_config.name)
+
                 # Success!
                 total_latency = (time.time() - start_time) * 1000
                 

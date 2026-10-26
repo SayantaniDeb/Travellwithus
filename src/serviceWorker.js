@@ -9,6 +9,10 @@ const isLocalhost = Boolean(
 
 export function register() {
   if ('serviceWorker' in navigator) {
+    if (import.meta.env.DEV) {
+      navigator.serviceWorker.getRegistrations().then(registrations => Promise.all(registrations.filter(registration => new URL(registration.scope).pathname === '/').map(registration => registration.unregister()))).catch(() => {});
+      return;
+    }
     const publicUrl = new URL(process.env.PUBLIC_URL || '', window.location.href);
     if (publicUrl.origin !== window.location.origin) {
       return;

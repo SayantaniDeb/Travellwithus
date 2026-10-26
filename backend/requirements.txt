@@ -3,3 +3,6 @@ uvicorn>=0.27.0
 httpx>=0.26.0
 python-dotenv>=1.0.0
 pydantic>=2.5.0
+geonamescache==3.0.1
+firebase-admin>=6.5.0
+Pillow>=11.0.0

@@ -1,6 +1,6 @@
 // Service Worker for Travel With Us PWA
 // UPDATE THIS VERSION NUMBER TO FORCE CACHE CLEAR ON DEPLOYMENT
-const APP_VERSION = 'v3.0.0';
+const APP_VERSION = 'v3.0.1';
 const CACHE_NAME = `travel-with-us-${APP_VERSION}`;
 const STATIC_CACHE = `travel-static-${APP_VERSION}`;
 const DYNAMIC_CACHE = `travel-dynamic-${APP_VERSION}`;
@@ -59,6 +59,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Local development must always use current source, never cached modules.
+  if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) return;
 
   // Skip cross-origin requests
   if (url.origin !== location.origin) return;

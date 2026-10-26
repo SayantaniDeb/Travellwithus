@@ -1,16 +1,39 @@
+import LoadingSpinner from './LoadingSpinner';
+import { parseEstimatedCost } from '../utils/tripBudget';
+import { itineraryDayLabel } from '../utils/dayLabels';
+import { canResumeTrip } from '../utils/tripNavigation';
+import PlanBudgetWarning from './PlanBudgetWarning';
+import TravelDayCost from './TravelDayCost';
+import DayRefreshButton from './DayRefreshButton';
+import BlankDayCard from './BlankDayCard';
+import { extendTrip } from '../utils/extendTrip';
+import JourneyTickets from './JourneyTickets';
+import { applyJourneyLeg } from '../utils/journeyLegs';
+import { readPlanningResponse } from '../utils/planningResponse';
+import TravelDayActivities from './TravelDayActivities';
+import { travelActivityTitle } from '../utils/travelSchedule';
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation as useRouterLocation } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
 import { auth, db } from '../Firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from '../Firebase';
 import Navbar from './Navbar';
+import TripSetupForm from './TripSetupForm';
+import TripCostOverview from './TripCostOverview';
+import TripHeader from './TripHeader';
+import { reserveTravelDays, refreshOnboardDay, attachTravelDirections } from '../utils/travelSchedule';
+import DestinationAutocomplete from './DestinationAutocomplete';
+import { requestTravelInfo, isUsableTravelInfo } from '../utils/travelInfo';
+import JourneyDirections from './JourneyDirections';
+import { localDate, addDays } from '../utils/tripDates';
+import { isUsableTripPlan, replaceTripDay, periodRefreshPrompt, applyPeriodRefresh } from '../utils/tripPlan';
 
 const LLM_PROVIDER = 'groq'; // 'groq', 'gemini', or 'openai'
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Helper function to call AI via backend proxy
-const callAI = async (model, prompt, maxTokens = 8000) => {
+const callAI = async (model, prompt, maxTokens = 8000, options = {}) => {
   const response = await fetch(`${API_URL}/api/completions`, {
     method: 'POST',
     headers: {
@@ -24,14 +47,15 @@ const callAI = async (model, prompt, maxTokens = 8000) => {
       ],
       max_tokens: maxTokens,
       temperature: 0.7,
+      use_cache: options.useCache !== false,
       provider: LLM_PROVIDER
     })
   });
 
-  const data = await response.json();
-  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-  return data.choices?.[0]?.message?.content;
+  return readPlanningResponse(response);
 };
+
+const generateTravelInfo = (source, destination, currency, mode = '') => requestTravelInfo(callAI, source, destination, currency, mode);
 
 // Currency data with symbols and location mapping
 const CURRENCIES = {
@@ -45,7 +69,7 @@ const CURRENCIES = {
 const getCurrencyFromLocation = (locationName) => {
   if (!locationName) return 'INR';
   const lowerLocation = locationName.toLowerCase();
-  
+
   for (const [code, data] of Object.entries(CURRENCIES)) {
     if (data.countries.some(country => lowerLocation.includes(country))) {
       return code;
@@ -56,18 +80,21 @@ const getCurrencyFromLocation = (locationName) => {
 
 export default function TripPlanner() {
   const [searchParams] = useSearchParams();
-  const destination = searchParams.get('destination') || '';
+  const [destination, setDestination] = useState(() => searchParams.get('destination') || '');
   const navigate = useNavigate();
-  
+  const routeLocation = useRouterLocation();
+  const [hydratedKey,setHydratedKey]=useState(null);
+
   const [step, setStep] = useState('dates'); // 'dates', 'loading', 'calendar', 'dayDetail'
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(() => localDate());
+  const [endDate, setEndDate] = useState(() => addDays(localDate(), 3));
   const [sourceLocation, setSourceLocation] = useState(''); // Pickup point / source
-  const [budgetAmount, setBudgetAmount] = useState('');
+  const [budgetAmount, setBudgetAmount] = useState('10000');
   const [includeHotels, setIncludeHotels] = useState(true); // Toggle for hotel prices
   const [includeTravel, setIncludeTravel] = useState(true); // Toggle for travel costs
   const [plan, setPlan] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
+  const [journeyEditorOpen, setJourneyEditorOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -77,35 +104,49 @@ export default function TripPlanner() {
   const [showSignInPopup, setShowSignInPopup] = useState(false);
   const [showHotelPopup, setShowHotelPopup] = useState(false);
   const [tripSaved, setTripSaved] = useState(false);
+  const [refreshingDay, setRefreshingDay] = useState(null);
+  const [refreshingPeriod, setRefreshingPeriod] = useState(null);
+  const [refreshingTravel, setRefreshingTravel] = useState(false);
+  const [travelMessage, setTravelMessage] = useState('');
   const { locationName } = useLocation();
+
+  useEffect(() => {
+    if (plan) sessionStorage.setItem('staysTripContext', JSON.stringify({ ...plan, plannerDestination: destination, source: sourceLocation, currency, budgetAmount }));
+  }, [plan, sourceLocation, currency, budgetAmount, destination]);
 
   // Cache key for this trip planner session
   const cacheKey = `tripPlanner_${destination}`;
 
-  // Load cached state on mount
+  // Restore before persisting, including a guest itinerary returned by Stays.
   useEffect(() => {
-    const cachedData = sessionStorage.getItem(cacheKey);
-    if (cachedData) {
-      try {
-        const parsed = JSON.parse(cachedData);
-        setStep(parsed.step || 'dates');
-        setStartDate(parsed.startDate || '');
-        setEndDate(parsed.endDate || '');
+    try {
+      const resume = routeLocation.state?.resumePlan;
+      const cached = sessionStorage.getItem(cacheKey);
+      const parsed = canResumeTrip(resume) ? {
+        step:'calendar',plan:resume,startDate:resume.startDate,endDate:resume.endDate,
+        sourceLocation:resume.source,currency:resume.currency,budgetAmount:resume.budgetAmount,
+        includeHotels:resume.includeHotels,includeTravel:resume.includeTravel,
+      } : cached ? JSON.parse(cached) : null;
+      if (parsed) {
+        const usable = canResumeTrip(parsed.plan);
+        setStep(usable ? (parsed.step === 'dayDetail' && parsed.selectedDay ? 'dayDetail' : 'calendar') : 'dates');
+        setPlan(usable ? parsed.plan : null);
+        setSelectedDay(usable ? parsed.selectedDay || null : null);
+        setStartDate(parsed.startDate || localDate());
+        setEndDate(parsed.endDate || addDays(parsed.startDate || localDate(),3));
         setSourceLocation(parsed.sourceLocation || '');
-        setBudgetAmount(parsed.budgetAmount || '');
+        setBudgetAmount(parsed.budgetAmount ?? '10000');
+        setCurrency(parsed.currency || 'INR');
         setIncludeHotels(parsed.includeHotels !== false);
         setIncludeTravel(parsed.includeTravel !== false);
-        setPlan(parsed.plan || null);
-        setSelectedDay(parsed.selectedDay || null);
-        setCurrency(parsed.currency || 'INR');
-      } catch (err) {
-        console.error('Error loading cached trip data:', err);
       }
-    }
-  }, [cacheKey]);
+    } catch { setError('Could not restore the local draft.'); }
+    setHydratedKey(cacheKey);
+  }, [cacheKey,routeLocation.state]);
 
   // Save state to cache whenever it changes
   useEffect(() => {
+    if (hydratedKey !== cacheKey) return;
     const stateToCache = {
       step,
       startDate,
@@ -119,7 +160,7 @@ export default function TripPlanner() {
       currency
     };
     sessionStorage.setItem(cacheKey, JSON.stringify(stateToCache));
-  }, [step, startDate, endDate, sourceLocation, budgetAmount, includeHotels, includeTravel, plan, selectedDay, currency, cacheKey]);
+  }, [step, startDate, endDate, sourceLocation, budgetAmount, includeHotels, includeTravel, plan, selectedDay, currency, cacheKey, hydratedKey]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -149,7 +190,9 @@ export default function TripPlanner() {
     return diffDays;
   };
 
-  const generatePlan = async () => {
+  const generatePlan = async (options = {}) => {
+    const refreshing = options.refresh === true;
+    if (loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel) return;
 
     // --- STRICT VALIDATIONS ---
     // 1. Budget validation: must be pure numeric (no alpha/alphanumeric)
@@ -181,7 +224,7 @@ export default function TripPlanner() {
       return;
     }
 
-    setStep('loading');
+    if (!refreshing) setStep('loading');
     setLoading(true);
     setError(null);
 
@@ -220,7 +263,7 @@ TRANSPORT (based on distance):
     const hotelInDayJson = includeHotels ? `
       "hotel": {"name": "Hotel name", "pricePerNight": "${currencySymbol}XXX", "type": "Budget/Mid-range/Luxury"},` : '';
 
-    const prompt = `Create a ${numDays}-day travel plan for "${destination}"${sourceLocation ? ` from ${sourceLocation}` : ''}.
+    const prompt = `Create a ${numDays}-day travel plan for "${refreshing ? (plan.actualDestination || plan.destination || destination) : destination}"${sourceLocation ? ` from ${sourceLocation}` : ''}.
 
 Dates: ${startDate} to ${endDate}. Currency: ${currency} (${currencySymbol}).${budgetInfo}
 ${includeHotels ? 'Include hotel recommendations with prices.' : 'Do NOT include hotel information.'}
@@ -276,14 +319,16 @@ Return ONLY valid JSON:
   "totalBudget": "${currencySymbol}XXX"
 }
 
-Generate ${numDays} days with real locations for the actual destination. Keep descriptions brief.`;
+Generate ${numDays} days with real locations for the actual destination. Keep descriptions brief.
+Travel fares, durations and tips are unverified estimates: do not claim live availability or confirmed fares.
+${refreshing ? `Generate a different itinerary from these previous activities: ${JSON.stringify(plan.days.map(day => [day.morning?.activity, day.afternoon?.activity, day.evening?.activity]))}. Keep the destination and dates unchanged.` : ''}`;
 
     try {
       let text;
 
       if (LLM_PROVIDER === 'groq') {
         // Planning Agent: Generate basic plan without costs
-        text = await callAI('openai/gpt-oss-20b', prompt, 6000);
+        text = await callAI('openai/gpt-oss-20b', prompt, 6000, { useCache: !refreshing });
 
       } else if (LLM_PROVIDER === 'openai') {
         // Planning Agent: Generate basic plan without costs
@@ -322,17 +367,17 @@ Generate ${numDays} days with real locations for the actual destination. Keep de
           console.error('Initial JSON parse failed:', parseErr.message);
           // If JSON is truncated, try to fix common issues
           let fixedText = cleanText;
-          
+
           // Count braces and brackets
           const openBraces = (cleanText.match(/{/g) || []).length;
           const closeBraces = (cleanText.match(/}/g) || []).length;
           const openBrackets = (cleanText.match(/\[/g) || []).length;
           const closeBrackets = (cleanText.match(/\]/g) || []).length;
-          
+
           // Add missing closing brackets and braces
           for (let i = 0; i < openBrackets - closeBrackets; i++) fixedText += ']';
           for (let i = 0; i < openBraces - closeBraces; i++) fixedText += '}';
-          
+
           try {
             planData = JSON.parse(fixedText);
           } catch (secondErr) {
@@ -353,6 +398,9 @@ Generate ${numDays} days with real locations for the actual destination. Keep de
             }
           }
         }
+        if (!isUsableTripPlan(planData) || planData.days.length !== numDays) {
+          throw new Error(planData?.message || 'The AI returned an incomplete itinerary. Please try again.');
+        }
         planData.startDate = startDate;
         planData.endDate = endDate;
         planData.source = sourceLocation;
@@ -361,10 +409,22 @@ Generate ${numDays} days with real locations for the actual destination. Keep de
         planData.includeHotels = includeHotels;
         planData.includeTravel = includeTravel;
 
+        // Missing transport data must not silently remove the journey section.
+        if (includeTravel && sourceLocation.trim() && !isUsableTravelInfo(planData.travelInfo)) {
+          try { planData.travelInfo = await generateTravelInfo(sourceLocation, planData.actualDestination || planData.destination || destination, currency); }
+          catch { planData.travelInfo = null; }
+        }
+
+        if (includeTravel) {
+          if (refreshing && plan.travelSchedule) planData.travelInfo = plan.travelInfo;
+          planData = reserveTravelDays(planData);
+        }
+
         // Cost Agent: Add detailed cost breakdowns for each day (only if budget tracking is needed)
         if (Array.isArray(planData.days) && (includeHotels || includeTravel || budgetAmount)) {
           for (let i = 0; i < planData.days.length; i++) {
             const day = planData.days[i];
+            if (day.travelReservation) continue;
             const costPrompt = `For this day in ${destination}: ${day.title} - ${day.summary}
 
 Morning: ${day.morning.activity} at ${day.morning.location}
@@ -402,7 +462,7 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
         let ticketCost = 0;
         if (planData.travelInfo?.estimatedTicketCost) {
           const match = planData.travelInfo.estimatedTicketCost.match(/[\d,.]+/);
-          if (match) ticketCost = parseFloat(match[0].replace(/,/g, ''));
+          if (match) ticketCost = parseFloat(match[0].replace(/,/g, '')) * 2;
         }
         let dayCosts = 0;
         if (Array.isArray(planData.days)) {
@@ -414,10 +474,10 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
             return sum;
           }, 0);
         }
-        
+
         // Calculate total estimated cost (ticket + daily costs)
         const totalEstimatedCost = ticketCost + dayCosts;
-        
+
         // Add budget warning to plan data (but don't block)
         if (enteredBudget > 0 && totalEstimatedCost > enteredBudget) {
           planData.budgetWarning = {
@@ -429,8 +489,9 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
             message: `Estimated cost (${currencySymbol}${totalEstimatedCost.toLocaleString()}) exceeds your budget by ${currencySymbol}${(totalEstimatedCost - enteredBudget).toLocaleString()}`
           };
         }
-        
+
         setPlan(planData);
+        setTripSaved(false);
         setStep('calendar');
       } else {
         throw new Error('No response from AI');
@@ -439,13 +500,116 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
     } catch (err) {
       console.error('Error generating plan:', err);
       setError(err.message || 'Failed to generate plan');
-      setStep('dates');
+      if (!refreshing) setStep('dates');
     } finally {
       setLoading(false);
     }
   };
 
+  const saveJourneyCost = async (direction, costEstimate) => {
+    setPlan(current=>({...current,travelInfo:direction==='return'?{...current.travelInfo,returnJourney:{...current.travelInfo.returnJourney,costEstimate}}:{...current.travelInfo,costEstimate},totalBudget:null,budgetWarning:null}));
+    setTripSaved(false);
+  };
+  const addExtraDay = () => {
+    try { const {plan:updated}=extendTrip(plan); setPlan(updated); setEndDate(updated.endDate); setTripSaved(false); }
+    catch(err) {setError(err.message);}
+  };
+  const saveExtraDay = (index,day) => {setPlan(current=>replaceTripDay(current,index,day));setTripSaved(false);};
+  const refreshDay = async (dayIndex) => {
+    if (loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel) return;
+    if (plan.days[dayIndex]?.travelReservation) {
+      const updated = refreshOnboardDay(plan, dayIndex);
+      setPlan(updated);
+      setTripSaved(false);
+      return;
+    }
+    setRefreshingDay(dayIndex);
+    setError(null);
+    const previousDay = plan.days[dayIndex];
+    try {
+      const text = await callAI('openai/gpt-oss-20b', `Replace just one day of this trip to ${plan.actualDestination || plan.destination}.
+Return ONLY a JSON object with a days array containing exactly one day, using the same fields as the old day.
+Old day: ${JSON.stringify(previousDay)}.
+Other days (avoid duplicating their activities): ${JSON.stringify(plan.days.filter((_, index) => index !== dayIndex))}.
+Keep day number ${previousDay.day}, date ${previousDay.date}, arrival/departure obligations, source ${sourceLocation}, currency ${currency}, and trip budget ${budgetAmount || 'flexible'}.
+Offer different real activities with morning, afternoon and evening objects. Each needs activity, description, location, duration and estimatedCost. Include a numeric estimatedCost string for the full day and ${includeHotels ? 'a hotel recommendation' : 'no hotel'}. Costs are unverified estimates.`, 3000, { useCache: false });
+      const result = JSON.parse(text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, ''));
+      if (!isUsableTripPlan(result) || result.days.length !== 1) {
+        throw new Error('A replacement day could not be generated. Please try again.');
+      }
+      setPlan(current => replaceTripDay(current, dayIndex, result.days[0]));
+      setTripSaved(false);
+    } catch (err) {
+      setError(err.message || 'Could not refresh this day. Your itinerary has been kept.');
+    } finally {
+      setRefreshingDay(null);
+    }
+  };
+
+  const refreshPeriod = async (period) => {
+    if (loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel) return;
+    const dayIndex = plan.days.findIndex(day => day.day === selectedDay.day && day.date === selectedDay.date);
+    if (dayIndex < 0) return;
+    const day = plan.days[dayIndex];
+    if (day.travelReservation) {
+      const updated = refreshOnboardDay(plan, dayIndex, period);
+      setPlan(updated);
+      setSelectedDay(updated.days[dayIndex]);
+      setTripSaved(false);
+      return;
+    }
+    setRefreshingPeriod(period);
+    setError(null);
+    try {
+      const context = { ...plan, plannerDestination: destination, source: sourceLocation, currency, budgetAmount };
+      const text = await callAI('openai/gpt-oss-20b', periodRefreshPrompt(context, dayIndex, period), 4000, { useCache: false });
+      const replacement = JSON.parse(text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, ''));
+      const updated = applyPeriodRefresh(plan, dayIndex, replacement);
+      setPlan(updated);
+      setSelectedDay(current => current?.day === day.day && current?.date === day.date ? updated.days[dayIndex] : current);
+      setTripSaved(false);
+    } catch (err) {
+      setError(err.message || 'Could not refresh this activity. Your existing plan has been kept.');
+    } finally {
+      setRefreshingPeriod(null);
+    }
+  };
+
+  const refreshTravel = async (mode = '', direction = 'onward') => {
+    if (loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel) return;
+    setRefreshingTravel(true);
+    setTravelMessage('');
+    setError(null);
+    try {
+      const target = plan.actualDestination || plan.destination || destination;
+      const leg = await generateTravelInfo(direction === 'return' ? target : sourceLocation, direction === 'return' ? sourceLocation : target, currency, mode);
+      const travelInfo = applyJourneyLeg(plan, leg, direction);
+      // Prepare and validate before setting React state; updater errors are outside this try/catch.
+      const result = attachTravelDirections(plan, travelInfo, sourceLocation);
+      if (mode && !result.plan.travelSchedule) throw new Error(result.notice);
+      setPlan(result.plan);
+      setTravelMessage(result.notice || 'Travel directions added below. Journey days are reserved in your calendar.');
+      setIncludeTravel(true);
+      setTripSaved(false);
+    } catch (err) { setTravelMessage(err.message || 'Could not get travel directions. Your itinerary has been kept.'); }
+    finally { setRefreshingTravel(false); }
+  };
+
+  const reserveExistingTravel = () => {
+    try {
+      const updated = reserveTravelDays({ ...plan, source: sourceLocation, includeTravel });
+      setPlan(updated);
+      setSelectedDay(null);
+      setTripSaved(false);
+      setError(null);
+    } catch (err) { setTravelMessage(err.message); setError(err.message); }
+  };
+
   const saveTrip = async () => {
+    if(loading||refreshingDay!==null||refreshingPeriod!==null||refreshingTravel||saving){setError('Wait for the plan and estimates to finish before saving.');return null;}
+    if(!plan?.days?.length){setError('Generate a plan before saving.');return null;}
+    const missing=plan.days.filter(day=>!day.travelReservation&&!day.isDraftDay&&!day.estimateCleared&&parseEstimatedCost(day.estimatedCost)===null);
+    if(missing.length){setError('Daily estimates are missing. Refresh those days before saving so their costs are stored with the trip.');return null;}
     if (!user) {
       return null;
     }
@@ -480,232 +644,21 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
-  const getMinDate = () => new Date().toISOString().split('T')[0];
-
-  // Currency Spinner Component
-  const CurrencySelector = ({ className = '' }) => (
-    <div className={className}>
-      <select
-        value={currency}
-        onChange={e => setCurrency(e.target.value)}
-        className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-      >
-        {Object.entries(CURRENCIES).map(([code, data]) => (
-          <option key={code} value={code}>
-            {data.symbol} {code}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-
   // Step 1: Date Selection
   if (step === 'dates') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+      <div className="min-h-screen trip-page-background trip-setup-background">
         <Navbar />
         <div className="pt-20 sm:pt-24 pb-24 px-4">
           <div className="max-w-2xl mx-auto">
-            {/* Back button */}
-            <button 
-              onClick={() => {
-                // Clear cache when going back to home
-                sessionStorage.removeItem(cacheKey);
-                navigate('/home');
-              }}
-              className="inline-flex items-center gap-2 text-zinc-600 hover:text-zinc-900 text-sm mb-6 transition-all hover:-translate-x-0.5"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Home
-            </button>
-
-            {/* Card */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl p-6 mb-6">
-              <h1 className="text-2xl font-bold text-zinc-900 mb-2">Plan Your Trip</h1>
-              <p className="text-zinc-500 text-sm mb-6">to <span className="text-zinc-900 font-semibold">{destination}</span></p>
-
-              {error && (
-                <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm mb-4">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-4">
-                {/* Source / Pickup Point */}
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">
-                    Traveling From
-                  </label>
-                  <input
-                    type="text"
-                    value={sourceLocation}
-                    onChange={(e) => setSourceLocation(e.target.value)}
-                    placeholder="e.g., Kolkata, India"
-                    className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                  {locationName && (
-                    <p className="text-xs text-zinc-500 mt-1">
-                      Auto-detected: {locationName}
-                    </p>
-                  )}
-                </div>
-
-                {/* Date inputs */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      min={getMinDate()}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className={`w-full px-3 py-2.5 bg-white border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                        startDate && new Date(startDate) < new Date(getMinDate()) 
-                          ? 'border-red-400 bg-red-50' 
-                          : 'border-zinc-300'
-                      }`}
-                    />
-                    {startDate && new Date(startDate) < new Date(getMinDate()) && (
-                      <p className="text-xs text-red-500 mt-1">Start date cannot be in the past</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={endDate}
-                      min={startDate || getMinDate()}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className={`w-full px-3 py-2.5 bg-white border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                        (endDate && startDate && new Date(endDate) < new Date(startDate)) ||
-                        (endDate && new Date(endDate) < new Date(getMinDate()))
-                          ? 'border-red-400 bg-red-50' 
-                          : 'border-zinc-300'
-                      }`}
-                    />
-                    {endDate && startDate && new Date(endDate) < new Date(startDate) && (
-                      <p className="text-xs text-red-500 mt-1">End date must be after start date</p>
-                    )}
-                    {endDate && !startDate && new Date(endDate) < new Date(getMinDate()) && (
-                      <p className="text-xs text-red-500 mt-1">End date cannot be in the past</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Budget & Currency Row */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">Your Budget</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-medium text-sm">
-                        {CURRENCIES[currency]?.symbol || '$'}
-                      </span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={budgetAmount}
-                        onChange={(e) => {
-                          // Strip any non-numeric characters and only keep digits
-                          const value = e.target.value.replace(/[^0-9]/g, '');
-                          setBudgetAmount(value);
-                        }}
-                        onKeyDown={(e) => {
-                          // Prevent non-numeric keys except backspace, delete, tab, arrows
-                          const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
-                          if (!allowedKeys.includes(e.key) && !/^\d$/.test(e.key)) {
-                            e.preventDefault();
-                          }
-                        }}
-                        onPaste={(e) => {
-                          // Handle paste - strip non-numeric characters
-                          e.preventDefault();
-                          const pastedText = e.clipboardData.getData('text');
-                          const numericOnly = pastedText.replace(/[^0-9]/g, '');
-                          setBudgetAmount(prev => prev + numericOnly);
-                        }}
-                        placeholder="10000"
-                        className="w-full pl-8 pr-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">Currency</label>
-                    <CurrencySelector className="w-full" />
-                  </div>
-                </div>
-
-                {/* Include Options - Hotel & Travel Toggles */}
-                <div className="bg-zinc-50 rounded-xl p-4 space-y-3">
-                  <p className="text-sm font-medium text-zinc-700">Include in your plan:</p>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    {/* Hotel Prices Toggle */}
-                    <label className="flex items-center gap-3 flex-1 p-3 bg-white rounded-lg border border-zinc-200 cursor-pointer hover:border-blue-300 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={includeHotels}
-                        onChange={(e) => setIncludeHotels(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500"
-                      />
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">🏨</span>
-                        <div>
-                          <span className="text-sm font-medium text-zinc-800">Hotel Prices</span>
-                          <p className="text-xs text-zinc-500">Accommodation estimates</p>
-                        </div>
-                      </div>
-                    </label>
-
-                    {/* Travel Costs Toggle */}
-                    <label className="flex items-center gap-3 flex-1 p-3 bg-white rounded-lg border border-zinc-200 cursor-pointer hover:border-blue-300 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={includeTravel}
-                        onChange={(e) => setIncludeTravel(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500"
-                      />
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">✈️</span>
-                        <div>
-                          <span className="text-sm font-medium text-zinc-800">Travel Costs</span>
-                          <p className="text-xs text-zinc-500">Transport & tickets</p>
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Days indicator */}
-                {startDate && endDate && new Date(endDate) >= new Date(startDate) && (
-                  <div className="flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-                    <div className="text-center">
-                      <span className="text-3xl font-bold text-blue-600">{calculateDays()}</span>
-                      <span className="text-blue-600 ml-1 font-medium">day{calculateDays() > 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="h-8 w-px bg-blue-200"></div>
-                    <div className="text-sm text-zinc-600">
-                      {formatDate(startDate)} → {formatDate(endDate)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Submit button */}
-                <button
-                  onClick={generatePlan}
-                  disabled={
-                    !startDate || 
-                    !endDate || 
-                    new Date(startDate) < new Date(getMinDate()) ||
-                    new Date(endDate) < new Date(startDate)
-                  }
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl disabled:bg-zinc-300 disabled:text-zinc-500 disabled:cursor-not-allowed transition-all"
-                >
-                  {loading ? 'Generating...' : 'Generate My Plan ✨'}
-                </button>
-              </div>
-            </div>
+            <TripSetupForm
+              destination={destination} destinationProvided={Boolean(searchParams.get('destination')?.trim())} setDestination={setDestination} sourceLocation={sourceLocation} setSourceLocation={setSourceLocation}
+              startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate}
+              budgetAmount={budgetAmount} setBudgetAmount={setBudgetAmount} currency={currency} setCurrency={setCurrency}
+              currencies={CURRENCIES} includeHotels={includeHotels} setIncludeHotels={setIncludeHotels}
+              includeTravel={includeTravel} setIncludeTravel={setIncludeTravel} loading={loading} error={error}
+              onGenerate={generatePlan}
+            />
           </div>
         </div>
       </div>
@@ -721,7 +674,7 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
           <div className="mx-auto w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-lg p-8 flex flex-col items-center gap-4">
             {/* Spinner */}
             <div className="relative flex items-center justify-center mb-2">
-              <span className="block w-12 h-12 border-4 border-zinc-200 border-t-blue-600 rounded-full animate-spin"></span>
+              <LoadingSpinner label="Building your itinerary…"/>
               <span className="absolute w-6 h-6 bg-blue-50 rounded-full animate-pulse"></span>
             </div>
             <h3 className="text-xl font-bold text-zinc-900 tracking-tight">Creating Your Plan</h3>
@@ -740,88 +693,15 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
   // Step 3: Calendar View
   if (step === 'calendar' && plan) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+      <div className="min-h-screen trip-page-background">
         <Navbar />
         <div className="pt-20 sm:pt-24 pb-24 px-4">
           <div className="max-w-5xl mx-auto">
-            
-            {/* Budget Warning Banner */}
-            {plan.budgetWarning && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">⚠️</span>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-amber-800">Budget Warning</h3>
-                    <p className="text-amber-700 text-sm mt-1">{plan.budgetWarning.message}</p>
-                    <div className="mt-2 text-xs text-amber-600 space-y-1">
-                      <p>• Travel cost: {CURRENCIES[currency]?.symbol}{plan.budgetWarning.ticketCost.toLocaleString()}</p>
-                      <p>• Daily expenses: {CURRENCIES[currency]?.symbol}{plan.budgetWarning.dailyCosts.toLocaleString()}</p>
-                      <p>• Your budget: {CURRENCIES[currency]?.symbol}{plan.budgetWarning.userBudget.toLocaleString()}</p>
-                    </div>
-                    <p className="text-amber-600 text-xs mt-2 italic">
-                      💡 Tip: These are estimates. You can still save this trip and adjust your budget later.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {/* Header Card */}
-            <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-2xl p-5 sm:p-6 mb-6 shadow-xl">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                <div className="flex-1">
-                  {/* Journey Route - From → To */}
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    {sourceLocation ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium text-lg">{sourceLocation}</span>
-                        <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                        </svg>
-                      </div>
-                    ) : null}
-                    <h1 className="text-xl sm:text-2xl font-bold text-white">
-                      {plan.actualDestination || plan.destination}
-                    </h1>
-                  </div>
-                  {/* Show original search term if resolved to different place (only if truly different, not just more specific) */}
-                  {plan.actualDestination && 
-                   plan.actualDestination.toLowerCase() !== plan.destination.toLowerCase() && 
-                   !plan.actualDestination.toLowerCase().includes(plan.destination.toLowerCase()) && (
-                    <p className="text-blue-200 text-xs mb-1">
-                      You searched for "{plan.destination}" → We planned for {plan.actualDestination}
-                    </p>
-                  )}
-                  <p className="text-blue-100 text-sm mt-1">{plan.summary}</p>
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    {/* From Location Badge */}
-                    {sourceLocation && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-400/30 text-white text-xs font-medium rounded-full">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        From: {sourceLocation}
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/20 text-white text-xs font-medium rounded-full">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      {formatDate(startDate)} - {formatDate(endDate)}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-400/30 text-white text-xs font-medium rounded-full">
-                      💰 {plan.totalBudget}
-                    </span>
-                    {budgetAmount && (
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium rounded-full ${plan.budgetWarning ? 'bg-amber-400/40' : 'bg-white/20'}`}>
-                        Budget: {CURRENCIES[currency]?.symbol}{budgetAmount}
-                        {plan.budgetWarning && ' ⚠️'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            {error && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}</div>}
+            <TripHeader destination={plan.actualDestination || plan.destination || destination} source={sourceLocation}
+              summary={plan.summary} startDate={startDate} endDate={endDate} dayCount={plan.days?.length}
+              budget={budgetAmount} currency={currency} symbol={CURRENCIES[currency]?.symbol || '₹'}>
                   <button
                     onClick={() => {
                       if (!user) {
@@ -830,8 +710,8 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                       }
                       saveTrip();
                     }}
-                    disabled={saving}
-                    className="px-4 py-2.5 sm:px-5 sm:py-2.5 bg-white text-blue-700 rounded-xl text-sm font-medium hover:bg-blue-50 disabled:bg-white/50 disabled:text-blue-400 transition-all shadow-lg active:scale-[0.98] w-full sm:w-auto"
+                    disabled={saving || loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel}
+                    className="flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
                   >
                     {saving ? 'Saving...' : 'Save Trip'}
                   </button>
@@ -841,14 +721,14 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                         setShowSignInPopup(true);
                         return;
                       }
-                      
+
                       // Save trip first
                       const tripRef = await saveTrip();
                       if (tripRef) {
                         // Then navigate to budget tracking
                         navigate('/budget/' + tripRef.id, {
                           state: {
-                            tripData: plan,
+                            tripData: { ...plan, plannerDestination: destination, source: sourceLocation, currency, budgetAmount, includeHotels, includeTravel },
                             currency,
                             budgetAmount: budgetAmount ? parseFloat(budgetAmount) : 0,
                             fromPage: 'trip-planner'
@@ -856,177 +736,67 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                         });
                       }
                     }}
-                    className="px-4 py-2.5 sm:px-5 sm:py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-all shadow-lg active:scale-[0.98] w-full sm:w-auto"
+                    className="flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                   >
                     Track Budget
                   </button>
                   <button
                     onClick={() => {
-                      if (!user) {
-                        setShowHotelPopup(true);
-                        return;
-                      }
-                      if (!tripSaved) {
-                        alert('Please save your trip first before searching for hotels.');
-                        return;
-                      }
                       navigate('/hotels', {
                         state: {
-                          tripData: plan,
+                          tripData: { ...plan, plannerDestination: destination, source: sourceLocation, currency, budgetAmount, includeHotels, includeTravel },
                           fromPage: 'trip-planner'
                         }
                       });
                     }}
-                    className="px-4 py-2.5 sm:px-5 sm:py-2.5 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-all shadow-lg active:scale-[0.98] w-full sm:w-auto"
+                    className="flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                   >
-                    Search Hotel
+                    Find stays
                   </button>
-                </div>
-              </div>
+            {!plan.travelInfo && <button type="button" aria-expanded={journeyEditorOpen} onClick={() => setJourneyEditorOpen(value => !value)}>How to get there</button>}
+            </TripHeader>
+            <PlanBudgetWarning plan={plan} budget={budgetAmount} symbol={CURRENCIES[currency]?.symbol || '₹'} />
+            {!plan.travelInfo && journeyEditorOpen && (<JourneyDirections plan={plan} source={sourceLocation} onSourceChange={setSourceLocation} onGenerate={refreshTravel}
+              disabled={loading || refreshingDay !== null || refreshingPeriod !== null} busy={refreshingTravel} message={travelMessage} />)}
+            <TripCostOverview plan={{ ...plan, includeTravel }} budget={budgetAmount} symbol={CURRENCIES[currency]?.symbol || '₹'} />
+
+            {plan.travelInfo && <JourneyTickets onSaveCost={saveJourneyCost} plan={plan} source={sourceLocation} onSourceChange={setSourceLocation} onGenerate={refreshTravel} busy={refreshingTravel} disabled={loading || refreshingDay !== null || refreshingPeriod !== null} message={travelMessage} />}
+
+
+            <div className="mb-4 mt-7 flex flex-wrap items-center justify-between gap-3">
+              <div><h2 className="text-lg font-semibold text-slate-950">Day by day</h2><p className="mt-1 text-xs text-slate-500">Open a day to see activities, or refresh it for a different plan.</p></div>
+              <button type="button" onClick={() => generatePlan({ refresh: true })} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{loading ? 'Refreshing…' : 'Refresh entire itinerary'}</button>
             </div>
-
-            {/* Travel Tickets Card */}
-            {plan.travelInfo && (
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-lg p-5 mb-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-zinc-900">Travel Tickets</h3>
-                    <p className="text-xs text-zinc-500">Estimated costs for your journey</p>
-                  </div>
-                </div>
-                
-                {/* To and Fro Tickets */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Onward Journey */}
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">→</span>
-                      <span className="text-sm font-medium text-blue-800">Onward Journey</span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-zinc-600">From</span>
-                          <span className="text-sm font-medium text-zinc-900">{plan.travelInfo.from || sourceLocation || 'Your City'}</span>
-                        </div>
-                        {plan.travelInfo.fromStation && (
-                          <span className="text-xs text-blue-600 text-right">{plan.travelInfo.fromStation}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-zinc-600">To</span>
-                          <span className="text-sm font-medium text-zinc-900">{plan.travelInfo.to || plan.actualDestination || plan.destination}</span>
-                        </div>
-                        {plan.travelInfo.toStation && (
-                          <span className="text-xs text-blue-600 text-right">{plan.travelInfo.toStation}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-600">Mode</span>
-                        <span className="text-sm font-medium text-zinc-900">{plan.travelInfo.recommendedMode}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-600">Duration</span>
-                        <span className="text-sm font-medium text-zinc-900">{plan.travelInfo.travelDuration}</span>
-                      </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-blue-200">
-                        <span className="text-xs font-medium text-blue-700">Ticket Cost</span>
-                        <span className="text-lg font-bold text-blue-700">{plan.travelInfo.estimatedTicketCost}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Return Journey */}
-                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">←</span>
-                      <span className="text-sm font-medium text-purple-800">Return Journey</span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-zinc-600">From</span>
-                          <span className="text-sm font-medium text-zinc-900">{plan.travelInfo.to || plan.actualDestination || plan.destination}</span>
-                        </div>
-                        {plan.travelInfo.toStation && (
-                          <span className="text-xs text-purple-600 text-right">{plan.travelInfo.toStation}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-zinc-600">To</span>
-                          <span className="text-sm font-medium text-zinc-900">{plan.travelInfo.from || sourceLocation || 'Your City'}</span>
-                        </div>
-                        {plan.travelInfo.fromStation && (
-                          <span className="text-xs text-purple-600 text-right">{plan.travelInfo.fromStation}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-600">Mode</span>
-                        <span className="text-sm font-medium text-zinc-900">{plan.travelInfo.recommendedMode}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-600">Duration</span>
-                        <span className="text-sm font-medium text-zinc-900">{plan.travelInfo.travelDuration}</span>
-                      </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-purple-200">
-                        <span className="text-xs font-medium text-purple-700">Ticket Cost</span>
-                        <span className="text-lg font-bold text-purple-700">{plan.travelInfo.estimatedTicketCost}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Total & Tips */}
-                <div className="mt-4 pt-4 border-t border-zinc-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-zinc-700">Total Travel Cost (Round Trip)</span>
-                    <span className="text-xl font-bold text-emerald-600">
-                      {plan.travelInfo.estimatedTicketCost?.replace(/[\d,.]+/, (match) => (parseFloat(match.replace(/,/g, '')) * 2).toLocaleString())}
-                    </span>
-                  </div>
-                  {plan.travelInfo.tips && (
-                    <div className="flex items-start gap-2 mt-3 p-3 bg-amber-50 rounded-xl">
-                      <span className="text-amber-500">💡</span>
-                      <p className="text-xs text-amber-800">{plan.travelInfo.tips}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Days Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {plan.days?.map((day) => (
+              {plan.days?.map((day, dayIndex) => (
+                day.isDraftDay ? <BlankDayCard label={itineraryDayLabel(plan.days,day)} key={day.date} day={day} busy={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} onGenerate={() => refreshDay(dayIndex)} onSave={value => saveExtraDay(dayIndex, value)} /> : 
                 <div
                   key={day.day}
                   onClick={() => { setSelectedDay(day); setStep('dayDetail'); }}
-                  className="bg-white/80 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-4 cursor-pointer hover:border-zinc-300 hover:shadow-xl transition-all duration-300 group hover:-translate-y-1"
+                  className={`bg-white/80 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-4 cursor-pointer hover:border-zinc-300 hover:shadow-sm transition-all duration-200 group ${day.travelReservation ? 'travel-day-highlight' : ''}`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-3 py-1 rounded-lg shadow-sm">Day {day.day}</span>
-                    <span className="text-xs text-zinc-500">{formatDate(day.date)}</span>
+                    <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-3 py-1 rounded-lg shadow-sm">{itineraryDayLabel(plan.days,day)}</span>
+                    <div className="flex items-center gap-2"><span className="text-xs text-zinc-500">{formatDate(day.date)}</span><DayRefreshButton day={day} busy={refreshingDay === dayIndex} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} onClick={() => refreshDay(dayIndex)} /></div>
                   </div>
+                  
+                  {day.travelReservation && <p className="mb-2 text-xs font-semibold text-blue-700">{day.travelReservation.journeyId === 'onward' ? 'Onward journey' : 'Return journey'} · transport fixed</p>}
                   <h3 className="font-medium text-zinc-900 mb-1.5 group-hover:text-zinc-700 transition-colors">{day.title}</h3>
                   <p className="text-sm text-zinc-500 mb-3 line-clamp-2">{day.summary}</p>
-                  <div className="space-y-1.5">
+                  <TravelDayCost plan={plan} day={day} />
+                <div className="space-y-1.5">
                     <div className="flex items-center gap-2 text-xs text-zinc-600">
                       <span className="w-6 h-6 flex items-center justify-center bg-amber-100 rounded-lg text-amber-600">☀</span>
-                      <span className="truncate">{day.morning?.activity}</span>
+                      <span className="truncate">{travelActivityTitle(day, 'morning')}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-zinc-600">
                       <span className="w-6 h-6 flex items-center justify-center bg-blue-100 rounded-lg text-blue-600">◐</span>
-                      <span className="truncate">{day.afternoon?.activity}</span>
+                      <span className="truncate">{travelActivityTitle(day, 'afternoon')}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-zinc-600">
                       <span className="w-6 h-6 flex items-center justify-center bg-indigo-100 rounded-lg text-indigo-600">☾</span>
-                      <span className="truncate">{day.evening?.activity}</span>
+                      <span className="truncate">{travelActivityTitle(day, 'evening')}</span>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-zinc-200 flex justify-between items-center">
@@ -1035,7 +805,8 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                   </div>
                 </div>
               ))}
-            </div>
+
+              <button type="button" disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} onClick={addExtraDay} className="flex min-h-44 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/50 p-5 text-blue-700 hover:bg-blue-50 disabled:opacity-50"><span aria-hidden="true" className="text-3xl">+</span><span className="font-semibold">Add day</span><span className="text-xs text-slate-500">Extends the trip by one day; a reserved return shifts later.</span></button>            </div>
 
             {/* Packing List */}
             {plan.packingList && plan.packingList.length > 0 && (
@@ -1148,7 +919,7 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                         setShowHotelPopup(false);
                         navigate('/hotels', {
                           state: {
-                            tripData: plan,
+                            tripData: { ...plan, plannerDestination: destination, source: sourceLocation, currency, budgetAmount, includeHotels, includeTravel },
                             fromPage: 'trip-planner'
                           }
                         });
@@ -1177,8 +948,8 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
             {/* Header */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl shadow-zinc-200/50 p-5 mb-6">
               <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => setStep('calendar')} 
+                <button
+                  onClick={() => setStep('calendar')}
                   className="p-2.5 hover:bg-zinc-100 rounded-xl transition-all shadow-sm hover:shadow-md"
                 >
                   <svg className="w-5 h-5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1195,7 +966,11 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
               </div>
             </div>
 
+            {error && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>}
+            <div role="status" className="sr-only">{refreshingPeriod ? `Refreshing ${refreshingPeriod} activity` : ''}</div>
+            <p className="mb-4 text-xs leading-relaxed text-slate-500">{selectedDay.travelReservation ? 'This day is reserved for travel. Refresh changes only onboard suggestions; route, transport and dates stay fixed.' : 'Refreshing an activity also updates linked meals, transfers and activities when needed to keep the day consistent.'}</p>
             {/* Content */}
+            {selectedDay.travelReservation ? <TravelDayActivities plan={plan} day={selectedDay} busy={refreshingDay !== null || refreshingPeriod !== null} onRefresh={period => refreshPeriod(period)} /> : (
             <div className="space-y-4">
               {/* Summary */}
               <p className="text-zinc-600 text-sm text-center italic bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 p-4 shadow-lg shadow-zinc-200/30">
@@ -1210,8 +985,11 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                     <h4 className="font-medium text-zinc-900">Morning</h4>
                     <p className="text-xs text-zinc-400">{selectedDay.morning?.duration}</p>
                   </div>
+                  <button type="button" aria-label="Refresh morning activity" onClick={() => refreshPeriod('morning')} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} className="shrink-0 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+                    {refreshingPeriod === 'morning' ? 'Refreshing…' : '↻ Refresh'}
+                  </button>
                 </div>
-                <h5 className="font-medium text-zinc-800 mb-1">{selectedDay.morning?.activity}</h5>
+                <h5 className="font-medium text-zinc-800 mb-1">{travelActivityTitle(selectedDay, 'morning')}</h5>
                 <p className="text-sm text-zinc-500 mb-2">{selectedDay.morning?.description}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDay.morning?.location)}`} target="_blank" className="text-blue-600 hover:underline">{selectedDay.morning?.location}</a>
@@ -1238,8 +1016,11 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                     <h4 className="font-medium text-zinc-900">Afternoon</h4>
                     <p className="text-xs text-zinc-400">{selectedDay.afternoon?.duration}</p>
                   </div>
+                  <button type="button" aria-label="Refresh afternoon activity" onClick={() => refreshPeriod('afternoon')} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} className="shrink-0 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+                    {refreshingPeriod === 'afternoon' ? 'Refreshing…' : '↻ Refresh'}
+                  </button>
                 </div>
-                <h5 className="font-medium text-zinc-800 mb-1">{selectedDay.afternoon?.activity}</h5>
+                <h5 className="font-medium text-zinc-800 mb-1">{travelActivityTitle(selectedDay, 'afternoon')}</h5>
                 <p className="text-sm text-zinc-500 mb-2">{selectedDay.afternoon?.description}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDay.afternoon?.location)}`} target="_blank" className="text-blue-600 hover:underline">{selectedDay.afternoon?.location}</a>
@@ -1266,8 +1047,11 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                     <h4 className="font-medium text-zinc-900">Evening</h4>
                     <p className="text-xs text-zinc-400">{selectedDay.evening?.duration}</p>
                   </div>
+                  <button type="button" aria-label="Refresh evening activity" onClick={() => refreshPeriod('evening')} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} className="shrink-0 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+                    {refreshingPeriod === 'evening' ? 'Refreshing…' : '↻ Refresh'}
+                  </button>
                 </div>
-                <h5 className="font-medium text-zinc-800 mb-1">{selectedDay.evening?.activity}</h5>
+                <h5 className="font-medium text-zinc-800 mb-1">{travelActivityTitle(selectedDay, 'evening')}</h5>
                 <p className="text-sm text-zinc-500 mb-2">{selectedDay.evening?.description}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDay.evening?.location)}`} target="_blank" className="text-blue-600 hover:underline">{selectedDay.evening?.location}</a>
@@ -1304,7 +1088,7 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
                   <p className="text-3xl font-bold mt-1">{selectedDay.estimatedCost}</p>
                 </div>
               )}
-            </div>
+            </div>)}
           </div>
         </div>
       </div>

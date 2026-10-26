@@ -1,9 +1,34 @@
+import LazyCard from './LazyCard';
+import LoadingSpinner from './LoadingSpinner';
+import { itineraryDayLabel } from '../utils/dayLabels';
+import { Trash2 } from 'lucide-react';
+import SavedTripsSummary from './SavedTripsSummary';
+import PlanBudgetWarning from './PlanBudgetWarning';
+import TravelDayCost from './TravelDayCost';
+import DayRefreshButton from './DayRefreshButton';
+import BlankDayCard from './BlankDayCard';
+import { extendTrip } from '../utils/extendTrip';
+import JourneyTickets from './JourneyTickets';
+import { applyJourneyLeg, removeJourney } from '../utils/journeyLegs';
+import { readPlanningResponse } from '../utils/planningResponse';
+import TravelDayActivities from './TravelDayActivities';
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { savedTripPath } from '../utils/tripNavigation';
 import { auth, db } from '../Firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from '../Firebase';
 import Navbar from './Navbar';
+import ChosenStay from './ChosenStay';
+import BudgetTrackerPreview from './BudgetTrackerPreview';
+import TripHeader from './TripHeader';
+import EditableEstimate from './EditableEstimate';
+import DayCostEstimate from './DayCostEstimate';
+import JourneyDirections from './JourneyDirections';
+import { requestTravelInfo } from '../utils/travelInfo';
+import { travelActivityTitle, reserveTravelDays, refreshOnboardDay, attachTravelDirections } from '../utils/travelSchedule';
+import { isUsableTripPlan, replaceTripDay, periodRefreshPrompt, applyPeriodRefresh } from '../utils/tripPlan';
+import { tripBudgetSummary, budgetOnlyPatch, parseEstimatedCost } from '../utils/tripBudget';
 
 // LLM provider configuration
 const LLM_PROVIDER = import.meta.env.VITE_LLM_PROVIDER || 'groq';
@@ -24,13 +49,12 @@ const callAI = async (model, prompt, maxTokens = 8000) => {
       ],
       max_tokens: maxTokens,
       temperature: 0.7,
+      use_cache: false,
       provider: LLM_PROVIDER
     })
   });
 
-  const data = await response.json();
-  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-  return data.choices?.[0]?.message?.content;
+  return readPlanningResponse(response);
 };
 
 // Currency data for display
@@ -52,18 +76,58 @@ const CURRENCIES = {
   KRW: { symbol: '₩', name: 'South Korean Won' },
 };
 
+function BudgetComparison({ trip, budget }) {
+  const summary = tripBudgetSummary(trip, budget);
+  const symbol = CURRENCIES[trip.currency]?.symbol || '₹';
+  return <div aria-live="polite" className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+    <div className="flex justify-between gap-3"><span>Recorded plan estimate</span><strong>{symbol}{summary.estimate.toLocaleString()}</strong></div>
+    {summary.available && Number(budget) > 0 ? <div className={`mt-2 flex justify-between gap-3 font-semibold ${summary.balance < 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+      <span>{summary.balance < 0 ? 'Over budget by' : 'Estimated remaining'}</span><span>{symbol}{Math.abs(summary.balance).toLocaleString()}</span>
+    </div> : <p className="mt-2 text-xs text-amber-700">{(summary.missingDays || summary.missingTravel) ? 'Some day or transport costs are missing. A reliable remaining amount cannot be calculated yet.' : 'Set a budget to see the estimated remaining amount.'}</p>}
+    <p className="mt-2 text-xs leading-relaxed text-slate-500">Based on stored day estimates and separately recorded onward and return costs. Lodging, transfers and other unrecorded costs may be extra. This is not actual spending.</p>
+  </div>;
+}
+
 export default function SavedTrips() {
+  const returnLocation=useLocation();
   const [trips, setTrips] = useState([]);
+  const [journeyEditorOpen, setJourneyEditorOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
+  useEffect(()=>{
+    const scroll=returnLocation.state?.restoreChecklistScroll;
+    if(typeof scroll!=='number'||loading||(returnLocation.search.includes('trip=')&&!selectedTrip))return;
+    const frame=requestAnimationFrame(()=>window.scrollTo({top:scroll,behavior:'instant'}));
+    return()=>cancelAnimationFrame(frame);
+  },[loading,selectedTrip?.id,returnLocation.key]);
   const [editMode, setEditMode] = useState(false);
   const [editedDay, setEditedDay] = useState(null);
   const [showBudgetEditModal, setShowBudgetEditModal] = useState(false);
   const [newBudget, setNewBudget] = useState('');
   const [regenerating, setRegenerating] = useState(false);
+  const [refreshTarget, setRefreshTarget] = useState(null);
+  const [actionError, setActionError] = useState(null);
+  const [travelMessage, setTravelMessage] = useState('');
+  const [travelSource, setTravelSource] = useState('');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedTripId = searchParams.get('trip');
+
+  // The URL preserves the open trip across route changes and browser history.
+  useEffect(() => {
+    setSelectedTrip(selectedTripId ? trips.find(trip => trip.id === selectedTripId) || null : null);
+  }, [selectedTripId, trips]);
+
+  useEffect(() => {
+    setSelectedDay(null);
+    setEditMode(false);
+    setShowBudgetEditModal(false);
+    setActionError(null);
+    setTravelMessage('');
+    setTravelSource('');
+  }, [selectedTripId]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -104,6 +168,7 @@ export default function SavedTrips() {
     
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'trips', tripId));
+      setSearchParams({}, { replace: true });
       setSelectedTrip(null);
     } catch (err) {
       console.error('Error deleting trip:', err);
@@ -113,6 +178,7 @@ export default function SavedTrips() {
 
   const saveEditedDay = async () => {
     if (!selectedTrip || !editedDay) return;
+    if (selectedDay?.travelReservation) { setActionError('Journey dates and transport are fixed. Use onboard refresh instead.'); return; }
 
     try {
       const updatedDays = selectedTrip.days.map(d => 
@@ -134,11 +200,149 @@ export default function SavedTrips() {
     }
   };
 
+  const saveBudgetOnly = async () => {
+    const amount = Number(newBudget);
+    if (!selectedTrip || !user || !Number.isFinite(amount) || amount <= 0 || regenerating) return;
+    setRegenerating(true);
+    setActionError(null);
+    try {
+      await updateDoc(doc(db, 'users', user.uid, 'trips', selectedTrip.id), { ...budgetOnlyPatch(amount), updatedAt: new Date() });
+      setSelectedTrip(current => ({ ...current, ...budgetOnlyPatch(amount) }));
+      setShowBudgetEditModal(false);
+    } catch (err) { setActionError('Could not save the budget. Your trip has been kept.'); }
+    finally { setRegenerating(false); }
+  };
+
+  const saveJourneyCost = async (direction, costEstimate) => {
+    if (refreshTarget || regenerating) return;
+    setRefreshTarget('cost');
+    try {
+      const travelInfo = direction === 'return' ? {...selectedTrip.travelInfo,returnJourney:{...selectedTrip.travelInfo.returnJourney,costEstimate}} : {...selectedTrip.travelInfo,costEstimate};
+      await updateDoc(doc(db,'users',user.uid,'trips',selectedTrip.id),{travelInfo,totalBudget:null,budgetWarning:null,updatedAt:new Date()});
+      setSelectedTrip({...selectedTrip,travelInfo,totalBudget:null,budgetWarning:null});
+    } finally {setRefreshTarget(null);}
+  };
+  const addExtraDay = async () => {
+    if (!selectedTrip || !user || regenerating || refreshTarget) return;
+    setRefreshTarget('extend'); setActionError(null);
+    try {
+      const {plan: updated} = extendTrip(selectedTrip);
+      await updateDoc(doc(db,'users',user.uid,'trips',selectedTrip.id), { days:updated.days, endDate:updated.endDate, travelSchedule:updated.travelSchedule || null, totalBudget:null,budgetWarning:null,updatedAt:new Date() });
+      setSelectedTrip(updated);
+    } catch(err) { setActionError(err.message); } finally { setRefreshTarget(null); }
+  };
+  const saveExtraDay = async (index, day) => {
+    if (regenerating || refreshTarget) return;
+    setRefreshTarget('manual'); setActionError(null);
+    try {
+      const updated=replaceTripDay(selectedTrip,index,day);
+      await updateDoc(doc(db,'users',user.uid,'trips',selectedTrip.id), {days:updated.days,totalBudget:null,budgetWarning:null,updatedAt:new Date()});
+      setSelectedTrip(updated);
+    } catch(err) { setActionError(err.message); } finally { setRefreshTarget(null); }
+  };
+  const removeSavedJourney=async direction=>{
+    if(!user||!selectedTrip||regenerating||refreshTarget)return;
+    if(!confirm(`Remove the ${direction} journey, its cost and its travel-day cards?`))return;
+    setRefreshTarget('travel');setActionError(null);
+    try{const updated=removeJourney(selectedTrip,direction);await updateDoc(doc(db,'users',user.uid,'trips',selectedTrip.id),{removedJourneys:updated.removedJourneys,travelInfo:updated.travelInfo,days:updated.days,travelSchedule:updated.travelSchedule,totalBudget:null,budgetWarning:null,updatedAt:new Date()});setSelectedTrip(updated);setSelectedDay(null);}
+    catch{setActionError('Could not remove the journey. Please retry.');}
+    finally{setRefreshTarget(null);}
+  };
+  const saveDayEstimate=async(day,period,amount)=>{
+    if(!user||!selectedTrip||refreshTarget||regenerating)throw new Error('Wait for the current update to finish.');
+    const index=selectedTrip.days.findIndex(item=>item.day===day.day&&item.date===day.date);
+    if(index<0||day.travelReservation)throw new Error('This day cannot be edited here.');
+    setRefreshTarget('cost');
+    try{
+      let replacement;
+      if(period){
+        replacement={...day,estimateCleared:false,[period]:{...day[period],estimatedCost:amount}};
+        const previous=parseEstimatedCost(day[period]?.estimatedCost),total=parseEstimatedCost(day.estimatedCost);
+        const parts=['morning','afternoon','evening'].map(key=>parseEstimatedCost(replacement[key]?.estimatedCost));
+        replacement.estimatedCost=total!==null&&previous!==null?Math.max(0,total-previous+amount):parts.every(n=>n!==null)?parts.reduce((a,b)=>a+b,0):null;
+        if(replacement.costs)replacement.costs=null;
+      }else{
+        const text=await callAI('openai/gpt-oss-20b',`Replan one destination day in ${selectedTrip.actualDestination||selectedTrip.destination} within a strict TOTAL day budget of ${amount} ${selectedTrip.currency||'INR'}. Existing day: ${JSON.stringify(day)}. Keep date and arrival/departure obligations. Choose cheaper real activities if needed. Return JSON with days containing exactly one day with title, summary, morning, afternoon, evening (activity, description, location, duration, numeric estimatedCost), and numeric estimatedCost for the entire day including meals and local transport. Do not invent cheap prices to force the budget. If infeasible, return the realistic minimum estimatedCost.`,4000);
+        const result=JSON.parse(text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));
+        replacement=result.days?.[0];
+        const estimate=parseEstimatedCost(replacement?.estimatedCost);
+        if(!isUsableTripPlan(result)||result.days.length!==1||estimate===null)throw new Error('The proposed day is incomplete. Your current plan was kept.');
+        if(estimate>amount)throw new Error(`The proposed plan exceeds your target by ${selectedTrip.currency||'INR'} ${(estimate-amount).toLocaleString()} (estimated total ${estimate.toLocaleString()}). Your current plan was kept.`);
+        replacement={...replacement,targetBudget:amount};
+      }
+      const updated=replaceTripDay(selectedTrip,index,replacement);
+      await updateDoc(doc(db,'users',user.uid,'trips',selectedTrip.id),{days:updated.days,totalBudget:null,budgetWarning:null,updatedAt:new Date()});
+      setSelectedTrip(updated);setSelectedDay(updated.days[index]);
+    }finally{setRefreshTarget(null);}
+  };
+  const refreshSaved = async (dayIndex, period = null) => {
+    if (regenerating || refreshTarget || editMode) return;
+    setRefreshTarget(period || `day-${dayIndex}`);
+    setActionError(null);
+    const original = selectedTrip;
+    const day = original.days[dayIndex];
+    try {
+      if (day.travelReservation) {
+        const updated = refreshOnboardDay(original, dayIndex, period);
+        await updateDoc(doc(db, 'users', user.uid, 'trips', original.id), { days: updated.days, updatedAt: new Date() });
+        setSelectedTrip(updated);
+        setSelectedDay(current => current?.day === day.day ? updated.days[dayIndex] : current);
+        return;
+      }
+      const prompt = period
+        ? periodRefreshPrompt(original, dayIndex, period)
+        : `Replace this day with a different complete itinerary in ${original.actualDestination || original.destination}: ${JSON.stringify(day)}. Return ONLY JSON with a days array containing exactly one day, with title, summary and morning/afternoon/evening objects, each with activity, description, location, duration, estimatedCost. Include day estimatedCost and preserve hotel/meals fields if present. Keep arrival/departure obligations.`;
+      const text = await callAI('openai/gpt-oss-20b', `${prompt} Currency: ${original.currency || 'INR'}. Entire trip budget: ${original.budgetAmount || 'flexible'}. Avoid duplicating these other activities: ${JSON.stringify(original.days.filter((_, i) => i !== dayIndex))}. Costs are unverified estimates.`, 4000);
+      const result = JSON.parse(text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, ''));
+      if (!period && (!isUsableTripPlan(result) || result.days.length !== 1)) throw new Error('Incomplete replacement day');
+      const updated = period ? applyPeriodRefresh(original, dayIndex, result) : replaceTripDay(original, dayIndex, result.days[0]);
+      await updateDoc(doc(db, 'users', user.uid, 'trips', original.id), { days: updated.days, totalBudget: null, budgetWarning: null, updatedAt: new Date() });
+      setSelectedTrip(updated);
+      setSelectedDay(current => current?.day === day.day && current?.date === day.date ? updated.days[dayIndex] : current);
+    } catch (err) { setActionError(err.message || 'Could not refresh. Your saved plan has been kept.'); }
+    finally { setRefreshTarget(null); }
+  };
+
+  const addSavedDirections = async (mode = '', direction = 'onward') => {
+    if (!selectedTrip || !user || regenerating || refreshTarget) return;
+    const original = selectedTrip;
+    const source = travelSource || original.source || original.travelInfo?.from || '';
+    setRefreshTarget('travel');
+    setTravelMessage('');
+    try {
+      const destination = original.actualDestination || original.destination;
+      const leg = await requestTravelInfo(callAI, direction === 'return' ? destination : source, direction === 'return' ? source : destination, original.currency || 'INR', mode);
+      const info = applyJourneyLeg(original, leg, direction);
+      const result = attachTravelDirections(original, info, source);
+      if (mode && !result.plan.travelSchedule) throw new Error(result.notice);
+      await updateDoc(doc(db, 'users', user.uid, 'trips', original.id), {
+        travelInfo: info, source, includeTravel: true, days: result.plan.days,
+        travelSchedule: result.plan.travelSchedule || null, totalBudget: null, budgetWarning: null, updatedAt: new Date()
+      });
+      setSelectedTrip(result.plan);
+      setTravelMessage(result.notice || 'Directions saved to this trip. Travel days are reserved in the calendar.');
+    } catch (err) { setTravelMessage(err.message || 'Could not save directions. Your saved itinerary has been kept.'); }
+    finally { setRefreshTarget(null); }
+  };
+
+  const reserveSavedTravel = async () => {
+    if (regenerating || refreshTarget) return;
+    setRegenerating(true);
+    setActionError(null);
+    try {
+      const updated = reserveTravelDays(selectedTrip);
+      await updateDoc(doc(db, 'users', user.uid, 'trips', selectedTrip.id), { days: updated.days, travelSchedule: updated.travelSchedule, totalBudget: null, budgetWarning: null, updatedAt: new Date() });
+      setSelectedTrip(updated);
+      setSelectedDay(null);
+    } catch (err) { setActionError(err.message || 'Could not reserve travel days.'); }
+    finally { setRegenerating(false); }
+  };
+
   // Regenerate plan with new budget
-  const regeneratePlanWithBudget = async () => {
-    if (!selectedTrip || !newBudget) return;
+  const regeneratePlanWithBudget = async (budgetOverride = null) => {
+    if (!selectedTrip || regenerating || refreshTarget) return;
     
-    const budgetNum = parseFloat(newBudget);
+    const budgetNum = budgetOverride ?? Number(newBudget || selectedTrip.budgetAmount);
     if (isNaN(budgetNum) || budgetNum <= 0) {
       alert('Please enter a valid budget amount');
       return;
@@ -185,6 +389,7 @@ ACTIVITIES: Entry fees ₹50-₹500, guides ₹500-₹2,000
 Adjust prices appropriately for ${currency} currency.
 `}
 
+Every destination day must include a numeric estimatedCost in ${currency}, including food, local transport and activities. Include numeric estimatedCost in each activity too. Use zero for free activities. These are unverified planning estimates, not live quotes. Do not include onward/return fares in day totals.
 Return ONLY valid JSON (keep same structure as original):
 {
   "destination": "${selectedTrip.destination}",
@@ -210,9 +415,10 @@ Return ONLY valid JSON (keep same structure as original):
       "date": "${selectedTrip.days?.[i]?.date || ''}",
       "title": "Day title",
       "summary": "Day summary adjusted for budget",
-      "morning": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h"},
-      "afternoon": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "3h"},
-      "evening": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h"},
+      "estimatedCost": 0,
+      "morning": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h", "estimatedCost": 0},
+      "afternoon": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "3h", "estimatedCost": 0},
+      "evening": {"activity": "Activity", "description": "Description", "location": "Place", "duration": "2h", "estimatedCost": 0},
       "meals": {"breakfast": "Budget-appropriate food", "lunch": "Budget-appropriate food", "dinner": "Budget-appropriate food"},
       "tips": ["Tip"]
     }`).join(',\n    ')}
@@ -253,6 +459,17 @@ Return ONLY valid JSON (keep same structure as original):
           planData = JSON.parse(fixedText);
         }
 
+        if (!isUsableTripPlan(planData) || planData.days.length !== numDays) throw new Error('The replacement itinerary is incomplete.');
+        if(planData.days.some(day=>parseEstimatedCost(day.estimatedCost)===null))throw new Error('The replacement itinerary is missing daily cost estimates. Your saved plan has been kept. Please retry.');
+        planData.startDate = startDate;
+        planData.endDate = endDate;
+        planData.days = planData.days.map((day, index) => ({ ...day, day: selectedTrip.days[index].day, date: selectedTrip.days[index].date }));
+        planData.source = source;
+        planData.includeTravel = selectedTrip.includeTravel !== false;
+        if (planData.includeTravel) {
+          planData.travelInfo = selectedTrip.travelInfo || planData.travelInfo;
+          planData = reserveTravelDays(planData);
+        }
         // Update in Firestore
         await updateDoc(doc(db, 'users', user.uid, 'trips', selectedTrip.id), {
           ...planData,
@@ -283,7 +500,7 @@ Return ONLY valid JSON (keep same structure as original):
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50 flex items-center justify-center">
-        <div className="w-12 h-12 border-3 border-zinc-900 border-t-transparent rounded-full animate-spin"></div>
+        <LoadingSpinner label="Loading your trips…"/>
       </div>
     );
   }
@@ -318,7 +535,7 @@ Return ONLY valid JSON (keep same structure as original):
   // Trip List View
   if (!selectedTrip) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+      <div className="min-h-screen trip-page-background saved-trips-background">
         <Navbar />
         <div className="pt-20 sm:pt-24 pb-24 px-4">
           <div className="max-w-4xl mx-auto">
@@ -328,13 +545,9 @@ Return ONLY valid JSON (keep same structure as original):
                 <h1 className="text-xl font-semibold text-zinc-900">My Saved Trips</h1>
                 <p className="text-zinc-500 text-sm mt-0.5">{trips.length} trip{trips.length !== 1 ? 's' : ''} saved</p>
               </div>
-              <button
-                onClick={() => navigate('/home')}
-                className="px-4 py-2.5 text-zinc-600 hover:text-zinc-900 hover:bg-white/80 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md"
-              >
-                ← Back
-              </button>
             </div>
+
+            <SavedTripsSummary trips={trips} userId={user?.uid} />
 
             {trips.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl shadow-zinc-200/50 p-8 text-center">
@@ -357,7 +570,7 @@ Return ONLY valid JSON (keep same structure as original):
                 {trips.map((trip) => (
                   <div
                     key={trip.id}
-                    onClick={() => setSelectedTrip(trip)}
+                    onClick={() => navigate(savedTripPath(trip.id))}
                     className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 p-5 cursor-pointer hover:border-zinc-300 hover:shadow-xl hover:shadow-zinc-200/50 transition-all duration-300 group hover:-translate-y-1"
                   >
                     <div className="flex items-start justify-between mb-3">
@@ -380,9 +593,9 @@ Return ONLY valid JSON (keep same structure as original):
                           {trip.destination}
                         </h3>
                       </div>
-                      <span className="bg-gradient-to-r from-zinc-100 to-zinc-50 text-zinc-600 text-xs font-medium px-3 py-1 rounded-full shadow-sm border border-zinc-200/60">
+                      <div className="flex shrink-0 items-center gap-2"><span className="bg-gradient-to-r from-zinc-100 to-zinc-50 text-zinc-600 text-xs font-medium px-3 py-1 rounded-full shadow-sm border border-zinc-200/60">
                         {trip.days?.length || 0} days
-                      </span>
+                      </span><button type="button" aria-label={`Delete trip to ${trip.destination || 'destination'}`} title="Delete trip" onClick={event=>{event.stopPropagation();deleteTrip(trip.id);}} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-red-600 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"><Trash2 size={17} aria-hidden="true"/></button></div>
                     </div>
                     <p className="text-sm text-zinc-500 mb-4 line-clamp-2">{trip.summary}</p>
                     <div className="flex items-center justify-between">
@@ -392,7 +605,7 @@ Return ONLY valid JSON (keep same structure as original):
                         </svg>
                         {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
                       </span>
-                      <span className="text-sm font-semibold">{trip.totalBudget}</span>
+                      <span className="text-sm font-semibold">{trip.budgetAmount ? `${CURRENCIES[trip.currency]?.symbol || '₹'}${Number(trip.budgetAmount).toLocaleString()}` : (trip.totalBudget || 'Budget not set')}</span>
                     </div>
                     {trip.currency && (
                       <div className="mt-3 pt-3 border-t border-zinc-100/80">
@@ -419,24 +632,18 @@ Return ONLY valid JSON (keep same structure as original):
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
-        <Navbar />
+        {(regenerating||refreshTarget)&&<div className="fixed bottom-20 left-1/2 z-[80] -translate-x-1/2 rounded-2xl border border-blue-200 bg-white px-5 py-3 shadow-xl"><LoadingSpinner compact label="Updating your itinerary…"/></div>}
+        <Navbar onBack={() => { setSelectedDay(null); setEditMode(false); }} backLabel="Back to trip overview" />
         <div className="pt-20 sm:pt-24 pb-24 px-4">
           <div className="max-w-2xl mx-auto">
             {/* Header */}
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl shadow-zinc-200/50 p-5 mb-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <button 
-                    onClick={() => { setSelectedDay(null); setEditMode(false); }} 
-                    className="p-2.5 hover:bg-zinc-100 rounded-xl transition-all shadow-sm hover:shadow-md"
-                  >
-                    <svg className="w-5 h-5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
+
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-2.5 py-1 rounded-lg shadow-sm">Day {day.day}</span>
+                      <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-2.5 py-1 rounded-lg shadow-sm">{itineraryDayLabel(selectedTrip.days,day)}</span>
                       <span className="text-xs text-zinc-400">{formatDate(day.date)}</span>
                     </div>
                     <h1 className="text-lg font-semibold text-zinc-900">{day.title}</h1>
@@ -444,6 +651,7 @@ Return ONLY valid JSON (keep same structure as original):
                 </div>
                 {!editMode ? (
                   <button 
+                    disabled={Boolean(refreshTarget) || regenerating || Boolean(day.travelReservation)}
                     onClick={() => { setEditMode(true); setEditedDay({...day}); }}
                     className="p-2.5 hover:bg-zinc-100 rounded-xl transition-all shadow-sm hover:shadow-md"
                     title="Edit day"
@@ -463,13 +671,17 @@ Return ONLY valid JSON (keep same structure as original):
               </div>
             </div>
 
+            {actionError && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-800">{actionError}</p>}
+            {!editMode && <p className="mb-4 text-xs leading-relaxed text-slate-500">{day.travelReservation ? 'This is a reserved travel day. Refresh changes only onboard suggestions; the journey stays fixed.' : 'Activity refreshes also reconcile linked meals, transfers and activities before saving the revised day.'}</p>}
             {/* Content */}
+            {day.travelReservation ? <TravelDayActivities plan={selectedTrip} day={day} busy={regenerating || Boolean(refreshTarget)} onRefresh={period => refreshSaved(selectedTrip.days.findIndex(item => item.day === day.day), period)} /> : (
             <div className="space-y-4">
               {/* Morning */}
               <div className="bg-white/80 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-4 shadow-lg shadow-zinc-200/30 hover:shadow-xl transition-all">
                 <div className="flex items-center gap-3 mb-3">
                   <span className="w-10 h-10 flex items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-amber-600 rounded-xl text-lg shadow-sm">☀</span>
                   <h4 className="font-medium text-zinc-900">Morning</h4>
+                    {!editMode && <button type="button" aria-label="Refresh saved morning activity" disabled={regenerating || Boolean(refreshTarget)} onClick={() => refreshSaved(selectedTrip.days.findIndex(item => item.day === day.day), 'morning')} className="mt-1 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-50">{refreshTarget === 'morning' ? 'Refreshing…' : '↻ Refresh'}</button>}
                 </div>
                 {editMode ? (
                   <div className="space-y-3">
@@ -504,7 +716,7 @@ Return ONLY valid JSON (keep same structure as original):
                   </div>
                 ) : (
                   <>
-                    <h5 className="font-medium text-zinc-800 mb-1">{day.morning?.activity}</h5>
+                    <h5 className="font-medium text-zinc-800 mb-1">{travelActivityTitle(day, 'morning')}</h5>
                     <p className="text-sm text-zinc-500 mb-2">{day.morning?.description}</p>
                     <p className="text-xs text-zinc-400 flex items-center gap-1 mb-2">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -513,9 +725,10 @@ Return ONLY valid JSON (keep same structure as original):
                       </svg>
                       {day.morning?.location}
                     </p>
-                    {day.morning?.estimatedCost && (
+                    {day.morning?.estimatedCost !== undefined && day.morning?.estimatedCost !== null && (
                       <p className="text-xs text-emerald-600 font-medium">{day.morning.estimatedCost}</p>
                     )}
+                    {!day.travelReservation&&<EditableEstimate value={day.morning?.estimatedCost} currency={selectedTrip.currency||'INR'} disabled={regenerating||Boolean(refreshTarget)} onSave={amount=>saveDayEstimate(day,'morning',amount)}/>}
                   </>
                 )}
               </div>
@@ -545,6 +758,7 @@ Return ONLY valid JSON (keep same structure as original):
                 <div className="flex items-center gap-3 mb-3">
                   <span className="w-10 h-10 flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200 text-blue-600 rounded-xl text-lg shadow-sm">◐</span>
                   <h4 className="font-medium text-zinc-900">Afternoon</h4>
+                    {!editMode && <button type="button" aria-label="Refresh saved afternoon activity" disabled={regenerating || Boolean(refreshTarget)} onClick={() => refreshSaved(selectedTrip.days.findIndex(item => item.day === day.day), 'afternoon')} className="mt-1 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-50">{refreshTarget === 'afternoon' ? 'Refreshing…' : '↻ Refresh'}</button>}
                 </div>
                 {editMode ? (
                   <div className="space-y-3">
@@ -579,7 +793,7 @@ Return ONLY valid JSON (keep same structure as original):
                   </div>
                 ) : (
                   <>
-                    <h5 className="font-medium text-zinc-800 mb-1">{day.afternoon?.activity}</h5>
+                    <h5 className="font-medium text-zinc-800 mb-1">{travelActivityTitle(day, 'afternoon')}</h5>
                     <p className="text-sm text-zinc-500 mb-2">{day.afternoon?.description}</p>
                     <p className="text-xs text-zinc-400 flex items-center gap-1 mb-2">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -588,9 +802,10 @@ Return ONLY valid JSON (keep same structure as original):
                       </svg>
                       {day.afternoon?.location}
                     </p>
-                    {day.afternoon?.estimatedCost && (
+                    {day.afternoon?.estimatedCost !== undefined && day.afternoon?.estimatedCost !== null && (
                       <p className="text-xs text-emerald-600 font-medium">{day.afternoon.estimatedCost}</p>
                     )}
+                    {!day.travelReservation&&<EditableEstimate value={day.afternoon?.estimatedCost} currency={selectedTrip.currency||'INR'} disabled={regenerating||Boolean(refreshTarget)} onSave={amount=>saveDayEstimate(day,'afternoon',amount)}/>}
                   </>
                 )}
               </div>
@@ -620,6 +835,7 @@ Return ONLY valid JSON (keep same structure as original):
                 <div className="flex items-center gap-3 mb-3">
                   <span className="w-10 h-10 flex items-center justify-center bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-600 rounded-xl text-lg shadow-sm">☾</span>
                   <h4 className="font-medium text-zinc-900">Evening</h4>
+                    {!editMode && <button type="button" aria-label="Refresh saved evening activity" disabled={regenerating || Boolean(refreshTarget)} onClick={() => refreshSaved(selectedTrip.days.findIndex(item => item.day === day.day), 'evening')} className="mt-1 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-50">{refreshTarget === 'evening' ? 'Refreshing…' : '↻ Refresh'}</button>}
                 </div>
                 {editMode ? (
                   <div className="space-y-3">
@@ -654,7 +870,7 @@ Return ONLY valid JSON (keep same structure as original):
                   </div>
                 ) : (
                   <>
-                    <h5 className="font-medium text-zinc-800 mb-1">{day.evening?.activity}</h5>
+                    <h5 className="font-medium text-zinc-800 mb-1">{travelActivityTitle(day, 'evening')}</h5>
                     <p className="text-sm text-zinc-500 mb-2">{day.evening?.description}</p>
                     <p className="text-xs text-zinc-400 flex items-center gap-1 mb-2">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -663,9 +879,10 @@ Return ONLY valid JSON (keep same structure as original):
                       </svg>
                       {day.evening?.location}
                     </p>
-                    {day.evening?.estimatedCost && (
+                    {day.evening?.estimatedCost !== undefined && day.evening?.estimatedCost !== null && (
                       <p className="text-xs text-emerald-600 font-medium">{day.evening.estimatedCost}</p>
                     )}
+                    {!day.travelReservation&&<EditableEstimate value={day.evening?.estimatedCost} currency={selectedTrip.currency||'INR'} disabled={regenerating||Boolean(refreshTarget)} onSave={amount=>saveDayEstimate(day,'evening',amount)}/>}
                   </>
                 )}
               </div>
@@ -673,7 +890,7 @@ Return ONLY valid JSON (keep same structure as original):
               {/* Cost breakdown */}
               {day.costs && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-center shadow-lg mb-4">
-                  <span className="block mb-2 font-medium">Cost Breakdown for Day {day.day}</span>
+                  <span className="block mb-2 font-medium">Cost Breakdown for {itineraryDayLabel(selectedTrip.days,day)}</span>
                   <div className="flex flex-wrap justify-center gap-4 text-sm">
                     <div>Food: <span className="font-semibold text-emerald-700">{day.costs.food || '-'}</span></div>
                     <div>Hotel: <span className="font-semibold text-blue-700">{day.costs.hotel || '-'}</span></div>
@@ -684,7 +901,7 @@ Return ONLY valid JSON (keep same structure as original):
               )}
               {/* Cost */}
               <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-5 text-center shadow-xl shadow-emerald-500/30">
-                <span className="text-xs text-emerald-100 font-medium uppercase tracking-wide">Estimated Cost for Day {day.day}</span>
+                <span className="text-xs text-emerald-100 font-medium uppercase tracking-wide">Estimated Cost for {itineraryDayLabel(selectedTrip.days,day)}</span>
                 {editMode ? (
                   <input
                     value={editedDay.estimatedCost || ''}
@@ -692,7 +909,7 @@ Return ONLY valid JSON (keep same structure as original):
                     className="w-full px-3 py-2.5 bg-white border border-zinc-200 rounded-xl text-center text-xl font-semibold mt-2 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent shadow-lg"
                   />
                 ) : (
-                  <p className="text-3xl font-bold mt-1">{day.estimatedCost}</p>
+                  <><p className="text-3xl font-bold mt-1">{typeof day.estimatedCost==='number'?`${selectedTrip.currency||'INR'} ${day.estimatedCost.toLocaleString()}`:day.estimatedCost||'Not estimated'}</p>{!day.travelReservation&&<EditableEstimate target value={day.estimatedCost} currency={selectedTrip.currency||'INR'} disabled={regenerating||Boolean(refreshTarget)} onSave={amount=>saveDayEstimate(day,null,amount)}/>}</>
                 )}
               </div>
 
@@ -704,7 +921,7 @@ Return ONLY valid JSON (keep same structure as original):
                   Cancel
                 </button>
               )}
-            </div>
+            </div>)}
           </div>
         </div>
       </div>
@@ -713,244 +930,73 @@ Return ONLY valid JSON (keep same structure as original):
 
   // Trip Calendar View
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
-      <Navbar />
+    <div className="min-h-screen trip-page-background itinerary-background">
+      {(regenerating||refreshTarget)&&<div className="fixed bottom-20 left-1/2 z-[80] -translate-x-1/2 rounded-2xl border border-blue-200 bg-white px-5 py-3 shadow-xl"><LoadingSpinner compact label="Updating your itinerary…"/></div>}
+      <Navbar onBack={() => setSearchParams({})} backLabel="Back to saved trips" />
       <div className="pt-20 sm:pt-24 pb-24 px-4">
         <div className="max-w-5xl mx-auto">
-          {/* Header */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl shadow-zinc-200/50 p-5 sm:p-6 mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div className="flex-1">
-                {/* Journey Route - From → To */}
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  {selectedTrip.source && (
-                    <>
-                      <span className="text-zinc-600 font-medium">{selectedTrip.source}</span>
-                      <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                      </svg>
-                    </>
-                  )}
-                  <h1 className="text-xl sm:text-2xl font-semibold text-zinc-900">
-                    {selectedTrip.actualDestination || selectedTrip.destination}
-                  </h1>
-                </div>
-                {/* Show original search term if resolved to different place (only if truly different, not just more specific) */}
-                {selectedTrip.actualDestination && 
-                 selectedTrip.actualDestination.toLowerCase() !== selectedTrip.destination.toLowerCase() && 
-                 !selectedTrip.actualDestination.toLowerCase().includes(selectedTrip.destination.toLowerCase()) && (
-                  <p className="text-blue-600 text-xs mb-1">
-                    You searched for "{selectedTrip.destination}" → Planned for {selectedTrip.actualDestination}
-                  </p>
-                )}
-                <p className="text-zinc-500 text-sm mt-1">{selectedTrip.summary}</p>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {/* From Location Badge */}
-                  {selectedTrip.source && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full shadow-sm">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      From: {selectedTrip.source}
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 text-zinc-700 text-xs font-medium rounded-full shadow-sm">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    {formatDate(selectedTrip.startDate)} - {formatDate(selectedTrip.endDate)}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 text-xs font-medium rounded-full shadow-sm">
-                    {selectedTrip.totalBudget}
-                  </span>
-                  {selectedTrip.currency && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 text-zinc-600 text-xs font-medium rounded-full shadow-sm">
-                      <span className="font-semibold">{CURRENCIES[selectedTrip.currency]?.symbol || ''}</span> {selectedTrip.currency}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => {
-                    setNewBudget(selectedTrip.budgetAmount?.toString() || '');
-                    setShowBudgetEditModal(true);
-                  }}
-                  className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/25"
-                >
-                  ✏️ Edit Budget
-                </button>
-                <button
-                  onClick={() => navigate(`/budget/${selectedTrip.id}`)}
-                  className="px-4 py-2.5 bg-black text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all shadow-lg shadow-zinc-900/25"
-                >
-                  💰 Track Budget
-                </button>
-                <button
-                  onClick={() => setSelectedTrip(null)}
-                  className="px-4 py-2.5 text-zinc-600 hover:text-zinc-900 hover:bg-white/80 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md"
-                >
-                  ← Back
-                </button>
-                <button
-                  onClick={() => deleteTrip(selectedTrip.id)}
-                  className="px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
+          <TripHeader saved destination={selectedTrip.actualDestination || selectedTrip.destination} source={selectedTrip.source}
+            summary={selectedTrip.summary} startDate={selectedTrip.startDate} endDate={selectedTrip.endDate} dayCount={selectedTrip.days?.length}
+            budget={selectedTrip.budgetAmount} currency={selectedTrip.currency} symbol={CURRENCIES[selectedTrip.currency]?.symbol || '₹'}>
+            <button type="button" onClick={() => { setNewBudget(selectedTrip.budgetAmount?.toString() || ''); setActionError(null); setShowBudgetEditModal(true); }}>Edit budget</button>
+            <button type="button" disabled={regenerating || Boolean(refreshTarget)} onClick={() => regeneratePlanWithBudget(Number(selectedTrip.budgetAmount))}>{regenerating ? 'Refreshing…' : 'Refresh entire itinerary'}</button>
+            <button type="button" onClick={() => navigate(`/budget/${selectedTrip.id}`)}>Track budget</button>
+            <button type="button" onClick={() => navigate('/hotels', { state: { tripData: selectedTrip, fromPage: 'saved-trips' } })}>Find stays</button>
+            <button type="button" onClick={() => navigate(`/Todolist?trip=${encodeURIComponent(selectedTrip.id)}`,{state:{checklistOrigin:{path:returnLocation.pathname+returnLocation.search,scrollY:window.scrollY}}})}>Trip checklist</button>
+            <button type="button" data-variant="danger" onClick={() => deleteTrip(selectedTrip.id)}>Delete</button>
+          {!selectedTrip.travelInfo && <button type="button" aria-expanded={journeyEditorOpen} onClick={() => setJourneyEditorOpen(value => !value)}>How to get there</button>}
+            </TripHeader>
+            <PlanBudgetWarning plan={selectedTrip} budget={selectedTrip.budgetAmount} symbol={CURRENCIES[selectedTrip.currency]?.symbol || '₹'} />
+            {!selectedTrip.travelInfo && journeyEditorOpen && (<JourneyDirections plan={selectedTrip} source={travelSource || selectedTrip.source || selectedTrip.travelInfo?.from || ''}
+            onSourceChange={setTravelSource} onGenerate={addSavedDirections} busy={refreshTarget === 'travel'}
+            disabled={regenerating || Boolean(refreshTarget)} message={travelMessage} />)}
+
+          <ChosenStay trip={selectedTrip} userId={user?.uid} tripId={selectedTrip.id} onBrowse={() => navigate('/hotels?saved=1', { state: { tripData: selectedTrip, fromPage: 'saved-trips' } })} />
+
+          {selectedTrip.travelInfo && <JourneyTickets onRemove={removeSavedJourney} onSaveCost={saveJourneyCost} plan={selectedTrip} source={travelSource || selectedTrip.source || selectedTrip.travelInfo?.from || ''} onSourceChange={setTravelSource} onGenerate={addSavedDirections} busy={refreshTarget === 'travel'} disabled={regenerating || Boolean(refreshTarget)} message={travelMessage} />}
+
+          {actionError && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-800">{actionError}</p>}
+          <div className="mb-5 space-y-3">
+            <BudgetTrackerPreview key={selectedTrip.id} trip={selectedTrip} userId={user?.uid} symbol={CURRENCIES[selectedTrip.currency]?.symbol || '₹'} />
+            
           </div>
-
-          {/* Travel Tickets Card */}
-          {selectedTrip.travelInfo && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-lg p-5 mb-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-zinc-900">Travel Tickets</h3>
-                  <p className="text-xs text-zinc-500">Estimated costs for your journey</p>
-                </div>
-              </div>
-              
-              {/* To and Fro Tickets */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Onward Journey */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">→</span>
-                    <span className="text-sm font-medium text-blue-800">Onward Journey</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-600">From</span>
-                        <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.from || selectedTrip.source || 'Your City'}</span>
-                      </div>
-                      {selectedTrip.travelInfo.fromStation && (
-                        <span className="text-xs text-blue-600 text-right">{selectedTrip.travelInfo.fromStation}</span>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-600">To</span>
-                        <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.to || selectedTrip.actualDestination || selectedTrip.destination}</span>
-                      </div>
-                      {selectedTrip.travelInfo.toStation && (
-                        <span className="text-xs text-blue-600 text-right">{selectedTrip.travelInfo.toStation}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-600">Mode</span>
-                      <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.recommendedMode}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-600">Duration</span>
-                      <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.travelDuration}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-blue-200">
-                      <span className="text-xs font-medium text-blue-700">Ticket Cost</span>
-                      <span className="text-lg font-bold text-blue-700">{selectedTrip.travelInfo.estimatedTicketCost}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Return Journey */}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">←</span>
-                    <span className="text-sm font-medium text-purple-800">Return Journey</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-600">From</span>
-                        <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.to || selectedTrip.actualDestination || selectedTrip.destination}</span>
-                      </div>
-                      {selectedTrip.travelInfo.toStation && (
-                        <span className="text-xs text-purple-600 text-right">{selectedTrip.travelInfo.toStation}</span>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-600">To</span>
-                        <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.from || selectedTrip.source || 'Your City'}</span>
-                      </div>
-                      {selectedTrip.travelInfo.fromStation && (
-                        <span className="text-xs text-purple-600 text-right">{selectedTrip.travelInfo.fromStation}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-600">Mode</span>
-                      <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.recommendedMode}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-600">Duration</span>
-                      <span className="text-sm font-medium text-zinc-900">{selectedTrip.travelInfo.travelDuration}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-purple-200">
-                      <span className="text-xs font-medium text-purple-700">Ticket Cost</span>
-                      <span className="text-lg font-bold text-purple-700">{selectedTrip.travelInfo.estimatedTicketCost}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Total & Tips */}
-              <div className="mt-4 pt-4 border-t border-zinc-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-zinc-700">Total Travel Cost (Round Trip)</span>
-                  <span className="text-xl font-bold text-emerald-600">
-                    {selectedTrip.travelInfo.estimatedTicketCost?.replace(/[\d,.]+/, (match) => (parseFloat(match.replace(/,/g, '')) * 2).toLocaleString())}
-                  </span>
-                </div>
-                {selectedTrip.travelInfo.tips && (
-                  <div className="flex items-start gap-2 mt-3 p-3 bg-amber-50 rounded-xl">
-                    <span className="text-amber-500">💡</span>
-                    <p className="text-xs text-amber-800">{selectedTrip.travelInfo.tips}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Days Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {selectedTrip.days?.map((day) => (
+            {selectedTrip.days?.map((day, dayIndex) => (
+              <LazyCard key={day.date||day.day} eager={dayIndex<3} label={`Loading ${itineraryDayLabel(selectedTrip.days,day).toLowerCase()}…`}>{
+                day.isDraftDay ? <BlankDayCard label={itineraryDayLabel(selectedTrip.days,day)} key={day.date} day={day} busy={regenerating || Boolean(refreshTarget)} onGenerate={() => refreshSaved(dayIndex)} onSave={value => saveExtraDay(dayIndex, value)} /> : 
               <div
                 key={day.day}
                 onClick={() => setSelectedDay(day)}
-                className="bg-white/80 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-4 cursor-pointer hover:border-zinc-300 hover:shadow-xl hover:shadow-zinc-200/50 transition-all duration-300 group hover:-translate-y-1"
+                className={`backdrop-blur-sm border rounded-2xl p-4 cursor-pointer hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 ${day.travelReservation?'bg-yellow-50 border-yellow-300 shadow-md shadow-yellow-100/60':'bg-white/80 border-zinc-200/60 hover:border-zinc-300 hover:shadow-zinc-200/50'}`}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-3 py-1 rounded-lg shadow-sm">Day {day.day}</span>
-                  <span className="text-xs text-zinc-400">{formatDate(day.date)}</span>
+                  <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-3 py-1 rounded-lg shadow-sm">{itineraryDayLabel(selectedTrip.days,day)}</span>
+                  <div className="flex items-center gap-2"><span className="text-xs text-zinc-400">{formatDate(day.date)}</span><DayRefreshButton day={day} busy={refreshTarget === `day-${dayIndex}`} disabled={regenerating || Boolean(refreshTarget)} onClick={() => refreshSaved(dayIndex)} /></div>
                 </div>
+                
+                {day.travelReservation && <p className="mb-2 text-xs font-semibold text-blue-700">{day.travelReservation.journeyId === 'onward' ? 'Onward journey' : 'Return journey'} · transport fixed</p>}
                 <h3 className="font-medium text-zinc-900 mb-1.5 group-hover:text-zinc-700 transition-colors">{day.title}</h3>
                 <p className="text-sm text-zinc-500 mb-3 line-clamp-2">{day.summary}</p>
+                <TravelDayCost plan={selectedTrip} day={day} />
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
                     <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg text-amber-600 shadow-sm">☀</span>
-                    <span className="truncate">{day.morning?.activity}</span>
+                    <span className="truncate">{travelActivityTitle(day, 'morning')}</span>
                     {day.morning?.coordinates && (
                       <span className="ml-2 text-[10px] text-blue-500">[{day.morning.coordinates.lat}, {day.morning.coordinates.lng}]</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
                     <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-blue-600 shadow-sm">◐</span>
-                    <span className="truncate">{day.afternoon?.activity}</span>
+                    <span className="truncate">{travelActivityTitle(day, 'afternoon')}</span>
                     {day.afternoon?.coordinates && (
                       <span className="ml-2 text-[10px] text-blue-500">[{day.afternoon.coordinates.lat}, {day.afternoon.coordinates.lng}]</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
                     <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg text-indigo-600 shadow-sm">☾</span>
-                    <span className="truncate">{day.evening?.activity}</span>
+                    <span className="truncate">{travelActivityTitle(day, 'evening')}</span>
                     {day.evening?.coordinates && (
                       <span className="ml-2 text-[10px] text-blue-500">[{day.evening.coordinates.lat}, {day.evening.coordinates.lng}]</span>
                     )}
@@ -965,20 +1011,17 @@ Return ONLY valid JSON (keep same structure as original):
                     <div>Subtotal: <span className="font-semibold text-zinc-900">{day.costs.subtotal || '-'}</span></div>
                   </div>
                 )}
-                {day.estimatedCost && (
-                  <div className="mt-3 pt-3 border-t border-zinc-100 flex justify-between items-center">
-                    <span className="text-xs text-zinc-400">Est. cost</span>
-                    <span className="text-sm font-semibold text-emerald-700">{day.estimatedCost}</span>
-                  </div>
-                )}
+                <DayCostEstimate day={day} currency={selectedTrip.currency || 'INR'} />
                 <div className="mt-2 text-center">
                   <span className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity">
                     Click to view/edit
                   </span>
                 </div>
               </div>
+              }</LazyCard>
             ))}
-          </div>
+
+              <button type="button" disabled={regenerating || Boolean(refreshTarget)} onClick={addExtraDay} className="flex min-h-44 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/50 p-5 text-blue-700 hover:bg-blue-50 disabled:opacity-50"><span aria-hidden="true" className="text-3xl">+</span><span className="font-semibold">Add day</span><span className="text-xs text-slate-500">Extends the trip by one day; a reserved return shifts later.</span></button>          </div>
 
           {/* Packing List */}
           {selectedTrip.packingList && selectedTrip.packingList.length > 0 && (
@@ -1002,7 +1045,7 @@ Return ONLY valid JSON (keep same structure as original):
       {/* Budget Edit Modal */}
       {showBudgetEditModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+          <div role="dialog" aria-modal="true" aria-label="Edit budget" className="bg-white rounded-2xl shadow-2xl max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto w-full p-6 animate-in fade-in zoom-in duration-200">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1011,7 +1054,7 @@ Return ONLY valid JSON (keep same structure as original):
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-zinc-900">Edit Budget</h3>
-                <p className="text-sm text-zinc-500">Adjust budget to regenerate your plan</p>
+                <p className="text-sm text-zinc-500">See your balance and keep your itinerary</p>
               </div>
             </div>
 
@@ -1045,19 +1088,21 @@ Return ONLY valid JSON (keep same structure as original):
               {newBudget && selectedTrip.budgetAmount && (
                 <p className={`text-xs mt-2 ${parseFloat(newBudget) > selectedTrip.budgetAmount ? 'text-emerald-600' : 'text-amber-600'}`}>
                   {parseFloat(newBudget) > selectedTrip.budgetAmount 
-                    ? `↑ Budget increased by ${CURRENCIES[selectedTrip.currency]?.symbol}${(parseFloat(newBudget) - selectedTrip.budgetAmount).toLocaleString()} - Plan will include upgraded options`
+                    ? `↑ Budget increased by ${CURRENCIES[selectedTrip.currency]?.symbol}${(parseFloat(newBudget) - selectedTrip.budgetAmount).toLocaleString()}`
                     : parseFloat(newBudget) < selectedTrip.budgetAmount
-                    ? `↓ Budget decreased by ${CURRENCIES[selectedTrip.currency]?.symbol}${(selectedTrip.budgetAmount - parseFloat(newBudget)).toLocaleString()} - Plan will focus on budget-friendly options`
+                    ? `↓ Budget decreased by ${CURRENCIES[selectedTrip.currency]?.symbol}${(selectedTrip.budgetAmount - parseFloat(newBudget)).toLocaleString()}`
                     : ''}
                 </p>
               )}
             </div>
 
+            <div className="mb-4"><BudgetComparison trip={selectedTrip} budget={newBudget} /></div>
+            {actionError && <p role="alert" className="mb-3 text-sm text-red-700">{actionError}</p>}
             <div className="bg-blue-50 rounded-xl p-3 mb-4">
               <div className="flex items-start gap-2">
                 <span className="text-blue-500 text-lg">💡</span>
                 <p className="text-xs text-blue-700">
-                  Changing your budget will regenerate the entire trip plan with adjusted accommodations, activities, and recommendations to fit your new budget.
+                  Saving changes only your budget. Your itinerary stays as it is. Use the separate refresh controls if you want different recommendations.
                 </p>
               </div>
             </div>
@@ -1074,21 +1119,21 @@ Return ONLY valid JSON (keep same structure as original):
                 Cancel
               </button>
               <button
-                onClick={regeneratePlanWithBudget}
-                disabled={regenerating || !newBudget || parseFloat(newBudget) === selectedTrip.budgetAmount}
+                onClick={saveBudgetOnly}
+                disabled={regenerating || Boolean(refreshTarget) || !newBudget || Number(newBudget) <= 0 || Number(newBudget) === Number(selectedTrip.budgetAmount)}
                 className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {regenerating ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Regenerating...
+                    Saving...
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    Regenerate Plan
+                    Save budget
                   </>
                 )}
               </button>

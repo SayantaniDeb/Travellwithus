@@ -1,9 +1,12 @@
+import BackButton from './BackButton';
+import WeatherBadge from './WeatherBadge';
+import ThemeToggle from './ThemeToggle';
 import { Fragment, React, useState, useEffect } from 'react'
 import { Disclosure, Menu, Transition } from '@headlessui/react'
 import { Bars3Icon, BellIcon, XMarkIcon, ArrowRightOnRectangleIcon, DocumentTextIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
-import { NavLink, useNavigate } from 'react-router-dom'
-import { Button } from '@material-tailwind/react'
-import { signOut, onAuthStateChanged } from 'firebase/auth'
+import { NavLink, useNavigate, useLocation as useRouterLocation } from 'react-router-dom'
+import { signOut } from 'firebase/auth'
+import { onAuthStateChanged } from '../Firebase'
 import { auth, db } from '../Firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { useLocation } from '../context/LocationContext'
@@ -11,9 +14,6 @@ import {
   HomeIcon,
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
-  WalletIcon,
-  ClipboardDocumentListIcon,
-  CloudIcon,
   BuildingOfficeIcon,
   MapPinIcon,
   HeartIcon
@@ -23,20 +23,13 @@ const navigation = [
   { name: 'Dashboard', href: '/home', current: true },
   { name: 'My Trips', href: '/saved-trips', current: false },
   { name: 'Community', href: '/community', current: false },
-  { name: 'Budget', href: '/budgets', current: false },
-  { name: 'List', href: '/Todolist', current: false },
-  { name: 'Weather', href: '/Weather', current: false },
-  { name: 'Hotels', href: '/hotels', current: false },
-  { name: 'Shortlist', href: '/shortlist', current: false },
+  { name: 'Stays', href: '/hotels', current: false },
 ]
 
 const navIcons = [
   HomeIcon,
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
-  WalletIcon,
-  ClipboardDocumentListIcon,
-  CloudIcon,
   BuildingOfficeIcon,
   HeartIcon
 ];
@@ -52,12 +45,12 @@ function LocationBadge() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-full text-xs text-gray-500">
+      <div role="status" aria-label="Getting location" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500">
         <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
-        <span className="hidden sm:inline">Locating...</span>
+        <span className="sr-only">Locating...</span>
       </div>
     );
   }
@@ -66,11 +59,12 @@ function LocationBadge() {
     return (
       <div className="relative">
         <button
+          type="button" title={locationName} aria-label={`Location: ${locationName}`} aria-expanded={showPopup}
           onClick={() => setShowPopup(!showPopup)}
-          className="flex items-center gap-1 px-1.5 sm:px-2 py-1 bg-blue-50 hover:bg-blue-100 rounded-full text-xs text-blue-700 max-w-[80px] sm:max-w-[120px] transition-colors"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center bg-blue-50 hover:bg-blue-100 rounded-full text-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
         >
-          <MapPinIcon className="w-3 h-3 flex-shrink-0" />
-          <span className="truncate text-[10px] sm:text-xs">{locationName}</span>
+          <MapPinIcon aria-hidden="true" className="w-4 h-4" />
+          
         </button>
 
         {/* Location popup */}
@@ -122,17 +116,21 @@ function LocationBadge() {
 
   return (
     <button
-      onClick={requestLocation}
-      className="flex items-center gap-1 px-1.5 sm:px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-xs text-gray-600 transition-colors"
+      type="button" title="Set location" aria-label="Set location" onClick={requestLocation}
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
     >
-      <MapPinIcon className="w-3 h-3" />
-      <span className="hidden sm:inline">Set Location</span>
+      <MapPinIcon aria-hidden="true" className="w-4 h-4" />
+      
     </button>
   );
 }
 
-export default function Navbar() {
+export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
   const navigate = useNavigate();
+  const routeLocation = useRouterLocation();
+  const backButton = !['/', '/home'].includes(routeLocation.pathname) ? (
+    <BackButton onClick={onBack} aria-label={backLabel} title={backLabel} className="mr-3">Back</BackButton>
+  ) : null;
 
   const [userPhoto, setUserPhoto] = useState(null);
   const [userName, setUserName] = useState('');
@@ -306,7 +304,8 @@ export default function Navbar() {
             <div className="relative flex h-14 sm:h-16 items-center justify-between">
               {/* Logo and title always visible */}
               <div className="flex flex-1 items-center justify-start sm:items-stretch sm:justify-start">
-                <NavLink to="/home" className="flex flex-shrink-0 items-center gap-1 md:mr-8">
+                {backButton}
+            <NavLink to="/home" className="flex flex-shrink-0 items-center gap-1 md:mr-8">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 md:w-6 md:h-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
                   </svg>
@@ -315,6 +314,7 @@ export default function Navbar() {
               </div>
               {/* Only location badge and profile icon (question mark) for signed out */}
               <div className="flex items-center gap-2 sm:gap-3">
+                <ThemeToggle />
                 {/* Install App Button */}
                 {canInstall && !isStandalone && (
                   <button
@@ -408,14 +408,15 @@ export default function Navbar() {
         <div className="relative flex h-14 sm:h-16 items-center justify-between">
           {/* Logo and title always visible */}
           <div className="flex flex-1 items-center justify-start sm:items-stretch sm:justify-start">
+            {backButton}
             <NavLink to="/home" className="flex flex-shrink-0 items-center gap-1 md:mr-8">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 md:w-6 md:h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
               </svg>
-              <span className='hidden md:inline font-bold font-serif text-lg md:text-2xl'>Travel With Us</span>
+              <span className='hidden xl:inline font-bold font-serif text-lg md:text-2xl'>Travel With Us</span>
             </NavLink>
             {/* Desktop navigation - hidden on mobile and tablet, only show on large screens */}
-            <div className="hidden lg:flex flex-1 items-center justify-center space-x-4">
+            <div className="absolute left-1/2 hidden -translate-x-1/2 lg:flex items-center justify-center gap-3">
               {navigation.map((item, idx) => {
                 const Icon = navIcons[idx];
                 return (
@@ -424,7 +425,7 @@ export default function Navbar() {
                     to={item.href}
                     className={({ isActive }) =>
                       classNames(
-                        isActive ? 'bg-gray-900 text-white' : 'text-black hover:bg-gray-700 hover:text-white',
+                        (isActive || (item.href === '/hotels' && routeLocation.pathname === '/shortlist')) ? 'nav-feature-active bg-gray-900 text-white' : 'text-black hover:bg-gray-700 hover:text-white',
                         'flex flex-col items-center justify-center px-2 py-1 rounded-md text-xs font-medium transition-colors min-w-[48px]'
                       )
                     }
@@ -434,32 +435,35 @@ export default function Navbar() {
                   </NavLink>
                 );
               })}
+            </div>
+            <div aria-label="Account and travel actions" className="ml-auto hidden shrink-0 items-center justify-end gap-1.5 lg:flex">
+              <WeatherBadge />
               {/* Location Badge */}
-              <div className="flex flex-col items-center justify-center px-2 py-1">
+              <div className="flex items-center justify-center">
                 <LocationBadge />
               </div>
               {/* Install App Button */}
               {canInstall && !isStandalone && (
                 <button
                   onClick={handleInstallClick}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700"
                   title="Install App"
                 >
                   <ArrowDownTrayIcon className="w-3.5 h-3.5" />
-                  <span>Install</span>
+                  <span className="sr-only">Install</span>
                 </button>
               )}
               {/* Profile Icon */}
               <NavLink 
                 to="/profile" 
-                className="flex flex-col items-center justify-center px-2 py-1 rounded-full transition-all hover:ring-2 hover:ring-blue-400"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:ring-2 hover:ring-blue-400"
                 title="Profile"
               >
                 {userPhoto ? (
                   <img 
                     src={userPhoto} 
                     alt={userName} 
-                    className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover border-2 border-white shadow-sm bg-zinc-100"
+                    className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm bg-zinc-100"
                     onError={(e) => {
                       e.target.onerror = null;
                       e.target.style.display = 'none';
@@ -468,24 +472,26 @@ export default function Navbar() {
                   />
                 ) : null}
                 <div 
-                  className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 items-center justify-center text-white font-medium text-xs md:text-sm border-2 border-white shadow-sm"
+                  className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 items-center justify-center text-white font-medium text-xs md:text-sm border-2 border-white shadow-sm"
                   style={{ display: userPhoto ? 'none' : 'flex' }}
                 >
                   {getInitials(userName)}
                 </div>
               </NavLink>
               {/* Sign Out Icon */}
-              <button onClick={() => setShowLogoutConfirm(true)} className="flex flex-col items-center justify-center px-2 py-1 rounded-full bg-gray-900 text-white">
-                <ArrowRightOnRectangleIcon className="w-5 h-5" />
+              <ThemeToggle compact />
+              <button onClick={() => setShowLogoutConfirm(true)} aria-label="Sign out" title="Sign out" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white">
+                <ArrowRightOnRectangleIcon className="w-4 h-4" />
               </button>
             </div>
             {/* Mobile/Tablet navigation row - visible on mobile and tablet, hidden on large screens */}
-            <div className="flex lg:hidden flex-1 items-center justify-end gap-2">
+            <div className="flex lg:hidden flex-1 items-center justify-end gap-1 sm:gap-2">
+              <WeatherBadge />
               {/* Install App Button - Mobile/Tablet */}
               {canInstall && !isStandalone && (
                 <button
                   onClick={handleInstallClick}
-                  className="flex items-center gap-1 px-2 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
+                  className="hidden sm:flex items-center gap-1 px-2 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
                   title="Install App"
                 >
                   <ArrowDownTrayIcon className="w-3.5 h-3.5" />
@@ -517,8 +523,9 @@ export default function Navbar() {
                   {getInitials(userName)}
                 </div>
               </NavLink>
-              <button onClick={() => setShowLogoutConfirm(true)} className="flex items-center px-2 py-1 rounded-full bg-gray-900 text-white">
-                <ArrowRightOnRectangleIcon className="w-5 h-5" />
+              <ThemeToggle compact />
+              <button onClick={() => setShowLogoutConfirm(true)} aria-label="Sign out" title="Sign out" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white">
+                <ArrowRightOnRectangleIcon className="w-4 h-4" />
               </button>
             </div>
           </div>

@@ -23,35 +23,35 @@ class FallbackChain:
 # Model definitions
 MODELS = {
     "llama-3.3-70b-versatile": ModelConfig(
-        name="llama-3.3-70b-versatile",
+        name="openai/gpt-oss-120b",
         provider="groq",
         rpm_limit=30,
         context_window=128000,
         supports_json=True
     ),
     "mixtral-8x7b-32768": ModelConfig(
-        name="mixtral-8x7b-32768",
+        name="openai/gpt-oss-20b",
         provider="groq",
         rpm_limit=30,
         context_window=32768,
         supports_json=True
     ),
     "llama-3.1-8b-instant": ModelConfig(
-        name="llama-3.1-8b-instant",
+        name="qwen/qwen3.8-27b",
         provider="groq",
         rpm_limit=30,
         context_window=128000,
         supports_json=True
     ),
     "gemma2-9b-it": ModelConfig(
-        name="gemma2-9b-it",
+        name="openai/gpt-oss-20b",
         provider="groq",
         rpm_limit=30,
         context_window=8192,
         supports_json=True
     ),
     "qwen/qwen3-32b": ModelConfig(
-        name="qwen/qwen3-32b",
+        name="qwen/qwen3.8-27b",
         provider="groq",
         rpm_limit=30,
         context_window=32768,

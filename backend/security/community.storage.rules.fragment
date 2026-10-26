@@ -1,0 +1,7 @@
+// Merge inside your existing /b/{bucket}/o scope.
+// REMOVE any overlapping allow rule granting client access to this prefix.
+match /community_moderated/{allPaths=**} {
+  allow read, write: if false;
+}
+// The server publishes approved photos using per-object download URLs.
+// Admin SDK access bypasses these rules. Unapproved photos are never stored.

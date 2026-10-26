@@ -1,20 +1,19 @@
+import LoadingSpinner from './components/LoadingSpinner';
 // ...existing code...
-import { createBrowserRouter, RouterProvider, Route, createRoutesFromElements } from "react-router-dom";
+import { Navigate, createBrowserRouter, RouterProvider, Route, createRoutesFromElements } from "react-router-dom";
 import React, { Suspense, lazy } from 'react';
-import LoginForm from './components/LoginForm';
-import HotelSearch from './components/HotelSearch';
+const LoginForm = lazy(() => import('./components/LoginForm'));
+const HotelSearch = lazy(() => import('./components/HotelSearch'));
 import Layout from './components/Layout';
 import Section from './components/Section';
-import Todolist from './components/Todolist';
-import Weather from './components/Weather';
-import CityComponent from './components/modules/CityComponent';
-import TripPlanner from './components/TripPlanner';
-import SavedTrips from './components/SavedTrips';
-import BudgetTracker from './components/BudgetTracker';
-import BudgetList from './components/BudgetList';
-import Community from './components/Community';
-import Profile from './components/Profile';
-import Shortlist from './components/Shortlist';
+const Todolist = lazy(() => import('./components/Todolist'));
+const CityComponent = lazy(() => import('./components/modules/CityComponent'));
+const TripPlanner = lazy(() => import('./components/TripPlanner'));
+const SavedTrips = lazy(() => import('./components/SavedTrips'));
+const BudgetTracker = lazy(() => import('./components/BudgetTracker'));
+const BudgetList = lazy(() => import('./components/BudgetList'));
+const Community = lazy(() => import('./components/Community'));
+const Profile = lazy(() => import('./components/Profile'));
 
 
 
@@ -26,10 +25,10 @@ const router = createBrowserRouter(
         <Route path="/" element={<Section/>}/>
         <Route path="/home" element={<Section/>}/>
         <Route path="/City" element={<CityComponent/>}/>
-        <Route path="/Weather" element={<Weather/>}/>
+        <Route path="/Weather" element={<Navigate to="/home?weather=1" replace />}/>
         <Route path="/Todolist" element={<Todolist/>}/>
         <Route path="/hotels" element={<HotelSearch/>}/>
-        <Route path="/shortlist" element={<Shortlist/>}/>
+        <Route path="/shortlist" element={<Navigate to="/hotels?saved=1" replace />}/>
         <Route path="/plan-trip" element={<TripPlanner/>}/>
         <Route path="/saved-trips" element={<SavedTrips/>}/>
         <Route path="/budgets" element={<BudgetList/>}/>
@@ -51,7 +50,7 @@ const router = createBrowserRouter(
 
 function RouterPath() {
   return (
-    <RouterProvider router={router} future={{ v7_startTransition: true }} />
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-slate-50"><LoadingSpinner label="Opening your next stop…"/></div>}><RouterProvider router={router} future={{ v7_startTransition: true }} /></Suspense>
   );
 }
 

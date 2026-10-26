@@ -1,8 +1,9 @@
+import LoadingSpinner from './LoadingSpinner';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../Firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from '../Firebase';
 import Navbar from './Navbar';
 
 // Currency symbols
@@ -64,17 +65,17 @@ export default function BudgetList() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+      <div className="min-h-screen trip-page-background budget-background">
         <Navbar />
         <div className="pt-20 flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <LoadingSpinner label="Loading budgets…"/>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+    <div className="min-h-screen trip-page-background budget-background">
       <Navbar />
       <div className="pt-20 sm:pt-24 pb-24 px-4">
         <div className="max-w-4xl mx-auto">

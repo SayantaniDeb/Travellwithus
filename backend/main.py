@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -24,6 +24,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_router import ai_router, FeatureType, semantic_cache, rate_limiter
 
 app = FastAPI(title="TravelWithUs API Proxy")
+from community_images import router as community_images_router
+app.include_router(community_images_router)
 
 # CORS configuration
 app.add_middleware(
@@ -80,6 +82,13 @@ async def smart_completions(request: CompletionRequest):
         use_cache=request.use_cache
     )
     
+    # Failed providers must not masquerade as a successful, empty itinerary.
+    if result.fallback_level.value == "failed" or not isinstance(result.content, str) or not result.content.strip():
+        raise HTTPException(
+            status_code=503,
+            detail="AI planning is temporarily unavailable. Please try again later."
+        )
+
     # Return in OpenAI-compatible format
     return {
         "choices": [{
@@ -147,30 +156,74 @@ async def direct_completions(request: CompletionRequest):
 
 # ============ Weather API Proxy ============
 
+async def fallback_weather(q, lat, lon):
+    """Adapt Open-Meteo current conditions to the existing weather response."""
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            name, country = "Current location", ""
+            if q and q.strip():
+                geo = await client.get("https://geocoding-api.open-meteo.com/v1/search", params={"name": q.strip(), "count": 1, "language": "en"})
+                geo.raise_for_status()
+                matches = geo.json().get("results", [])
+                if not matches:
+                    raise HTTPException(status_code=404, detail="City not found. Try a city and country.")
+                place = matches[0]
+                lat, lon = place["latitude"], place["longitude"]
+                name, country = place["name"], place.get("country_code", "")
+            elif lat is None or lon is None:
+                raise HTTPException(status_code=400, detail="Enter a city name to check weather.")
+            response = await client.get("https://api.open-meteo.com/v1/forecast", params={"latitude": lat, "longitude": lon, "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m", "wind_speed_unit": "ms"})
+            response.raise_for_status()
+            current = response.json()["current"]
+            code = current["weather_code"]
+            description = ("Clear sky" if code == 0 else "Partly cloudy" if code in (1, 2) else "Overcast" if code == 3 else "Fog" if code in (45, 48) else "Thunderstorm" if code >= 95 else "Snow" if code in (71, 73, 75, 77, 85, 86) else "Rain")
+            return {"name": name, "sys": {"country": country}, "main": {"temp": current["temperature_2m"] + 273.15, "humidity": current["relative_humidity_2m"]}, "wind": {"speed": current["wind_speed_10m"]}, "weather": [{"description": description}], "provider": "Open-Meteo", "cod": 200}
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        raise HTTPException(status_code=502, detail="Weather is temporarily unavailable. Please try again shortly.")
+
+
 @app.get("/api/weather")
 async def proxy_weather(q: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None):
-    """Proxy endpoint for OpenWeatherMap API"""
-    
+    """Return weather or a meaningful HTTP error; never mask provider errors as success."""
     if not OPENWEATHER_API_KEY:
-        raise HTTPException(status_code=500, detail="OpenWeather API key not configured")
-    
-    base_url = "https://api.openweathermap.org/data/2.5/weather"
-    
-    if q:
-        url = f"{base_url}?q={q}&appid={OPENWEATHER_API_KEY}"
+        return await fallback_weather(q, lat, lon)
+    params = {"appid": OPENWEATHER_API_KEY}
+    if q and q.strip():
+        params["q"] = q.strip()
     elif lat is not None and lon is not None:
-        url = f"{base_url}?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}"
+        params.update({"lat": lat, "lon": lon})
     else:
-        raise HTTPException(status_code=400, detail="Either 'q' (city name) or 'lat' and 'lon' parameters are required")
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            response = await client.get(url)
-            return response.json()
-        except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="Request timed out")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=400, detail="Enter a city name to check weather.")
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get("https://api.openweathermap.org/data/2.5/weather", params=params)
+        data = response.json()
+        code = str(data.get("cod", response.status_code))
+        if response.status_code in (401, 403) or code in ("401", "403"):
+            logger.warning("Weather provider rejected the configured API key")
+            return await fallback_weather(q, lat, lon)
+        if response.status_code == 404 or code == "404":
+            raise HTTPException(status_code=404, detail="City not found. Try the city name followed by its country.")
+        if response.status_code == 429 or code == "429":
+            raise HTTPException(status_code=503, detail="Weather service is busy. Please try again shortly.")
+        if response.status_code != 200 or not isinstance(data.get("main", {}).get("temp"), (int, float)):
+            raise HTTPException(status_code=502, detail="Weather provider is unavailable. Please try again later.")
+        return data
+    except HTTPException:
+        raise
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Weather request timed out. Please try again.")
+    except (httpx.RequestError, ValueError):
+        raise HTTPException(status_code=502, detail="Weather provider could not be reached. Please try again later.")
+
+
+# Local destination search works without geocoding credentials.
+@app.get("/api/destinations")
+def destination_suggestions(q: str = Query(default="", max_length=120)):
+    from destinations import suggest_destinations
+    return {"suggestions": suggest_destinations(q), "attribution": "GeoNames"}
 
 
 # ============ Geocoding API Proxy ============

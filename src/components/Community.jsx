@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
-import { db, auth, storage } from '../Firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '../Firebase';
+import { onAuthStateChanged } from '../Firebase';
 import { 
   collection, 
   addDoc, 
@@ -17,7 +17,8 @@ import {
   serverTimestamp,
   getDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+const API_URL = import.meta.env.VITE_API_URL || '';
+const PHOTO_LIMIT = 5 * 1024 * 1024;
 
 function Community() {
   const navigate = useNavigate();
@@ -35,6 +36,49 @@ function Community() {
   const [pollVoting, setPollVoting] = useState({}); // { [postId]: true/false }
   const textareaRef = useRef(null);
   const replyInputRef = useRef(null);
+  const photoInputRef = useRef(null);
+  const [photo, setPhoto] = useState(null);
+  const [photoPermission, setPhotoPermission] = useState(false);
+  const [photoStatus, setPhotoStatus] = useState({ ready: false, message: 'Checking photo availability…' });
+  const [postError, setPostError] = useState('');
+  const [reportedPhotos, setReportedPhotos] = useState({});
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${API_URL}/api/community/image-status`, { signal: controller.signal })
+      .then(response => { if (!response.ok) throw new Error(); return response.json(); })
+      .then(setPhotoStatus).catch(() => { if (!controller.signal.aborted) setPhotoStatus({ ready: false, message: 'Photo posting is unavailable. You can still share text and polls.' }); });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.preview); }, [photo]);
+
+  const selectPhoto = event => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setPostError('Choose a JPEG, PNG or WebP photo.'); return; }
+    if (file.size > PHOTO_LIMIT) { setPostError('Choose a photo no larger than 5 MB.'); return; }
+    setPhoto({ file, preview: URL.createObjectURL(file) });
+    setPhotoPermission(false);
+    setPostError('');
+  };
+
+  const photoRequest = async (path, method = 'POST', payload) => {
+    const token = await user.getIdToken();
+    const response = await fetch(`${API_URL}/api/community/${path}`, {
+      method, headers: { Authorization: `Bearer ${token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
+      ...(payload ? { body: JSON.stringify(payload) } : {})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Photo posting could not complete. Please try again.');
+    return data;
+  };
+
+  const reportPhoto = async postId => {
+    if (!user || reportedPhotos[postId]) return;
+    try { await photoRequest(`image-post/${encodeURIComponent(postId)}/report`); setReportedPhotos(current => ({ ...current, [postId]: true })); }
+    catch (error) { setPostError(error.message); }
+  };
 
   // Auth listener and fetch profile
   useEffect(() => {
@@ -103,9 +147,10 @@ function Community() {
 
   // Create new post
   const handleCreatePost = async () => {
-    if ((!newPost.trim() && !pollActive) || !user || posting) return;
+    if ((!newPost.trim() && !pollActive && !photo) || !user || posting || (photo && (!photoPermission || !photoStatus.ready))) return;
 
     setPosting(true);
+    setPostError('');
     try {
       // Use profile data if available, otherwise fallback to auth data
       const authorName = userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'Anonymous';
@@ -116,6 +161,15 @@ function Community() {
         poll = pollOptions.filter(opt => opt.trim()).map(opt => ({ option: opt.trim(), votes: [] }));
         if (poll.length < 2) poll = null;
       }
+      if (photo) {
+        const encoded = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('The photo could not be read. Please select it again.'));
+          reader.readAsDataURL(photo.file);
+        });
+        await photoRequest('image-post', 'POST', { image: encoded, content: newPost.trim(), permission: photoPermission, poll: poll ? poll.map(option => option.option) : [] });
+      } else {
       await addDoc(collection(db, 'community_posts'), {
         content: newPost.trim(),
         authorId: user.uid,
@@ -126,6 +180,9 @@ function Community() {
         replies: [],
         poll: poll || null
       });
+      }
+      setPhoto(null);
+      setPhotoPermission(false);
       setNewPost('');
       setPollOptions(['', '']);
       setPollActive(false);
@@ -134,7 +191,7 @@ function Community() {
       }
     } catch (error) {
       console.error('Error creating post:', error);
-      alert('Failed to create post. Please try again.');
+      setPostError(error.message || 'Failed to create post. Please try again.');
     }
     setPosting(false);
   };
@@ -195,9 +252,12 @@ function Community() {
     
     if (window.confirm('Are you sure you want to delete this post?')) {
       try {
-        await deleteDoc(doc(db, 'community_posts', postId));
+        const post = posts.find(item => item.id === postId);
+        if (post?.media) await photoRequest(`image-post/${encodeURIComponent(postId)}`, 'DELETE');
+        else await deleteDoc(doc(db, 'community_posts', postId));
       } catch (error) {
         console.error('Error deleting post:', error);
+        setPostError(error.message || 'Could not delete this post.');
       }
     }
   };
@@ -256,7 +316,7 @@ function Community() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+      <div className="min-h-screen trip-page-background community-background">
         <Navbar />
         <div className="pt-20 sm:pt-24 pb-24 px-4">
           <div className="max-w-md mx-auto text-center">
@@ -282,7 +342,7 @@ function Community() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50">
+    <div className="min-h-screen trip-page-background community-background">
       <Navbar />
       <div className="pt-20 sm:pt-24 pb-24 px-4">
         <div className="max-w-2xl mx-auto">
@@ -323,14 +383,25 @@ function Community() {
                   className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none min-h-[80px]"
                   rows={3}
                   maxLength={500}
+                  disabled={posting}
                 />
                 <div className="flex items-center gap-2 mt-2">
-                  {/* Poll toggle only */}
+                  <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectPhoto} disabled={posting} className="hidden" aria-label="Choose a community photo" />
+                  <button type="button" disabled={posting} onClick={() => photoInputRef.current?.click()} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:opacity-50">Add photo</button>
+                  {/* Poll toggle */}
                   <button type="button" className={`text-xs px-2 py-1 rounded ${pollActive ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500 hover:bg-blue-50'}`} onClick={() => setPollActive(v => !v)}>
                     <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 17v-6m4 6V7m4 10v-3" /></svg>
                     Poll
                   </button>
                 </div>
+                {photo && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2"><p className="text-xs font-medium text-slate-600">Local preview · not uploaded yet</p><button type="button" disabled={posting} onClick={() => { setPhoto(null); setPhotoPermission(false); }} className="rounded-lg px-2 py-1 text-xs text-red-600">Remove photo</button></div>
+                  <img src={photo.preview} alt="Selected community photo preview" className="max-h-64 w-full rounded-lg object-contain" />
+                  <label className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-slate-600"><input type="checkbox" checked={photoPermission} disabled={posting} onChange={event => setPhotoPermission(event.target.checked)} className="mt-0.5" /><span>I own this photo or have permission to share it, including consent from identifiable people pictured.</span></label>
+                  <p className="mt-2 text-[11px] leading-relaxed text-slate-500">Before publishing, the photo and caption are sent to OpenAI for an automated safety check. Location metadata is removed. Checks may miss unwanted content; they cannot verify consent.</p>
+                  <p role="status" className={`mt-2 text-xs ${photoStatus.ready ? 'text-slate-500' : 'text-amber-700'}`}>{photoStatus.message}</p>
+                </div>}
+                {postError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{postError}</p>}
                 {/* Poll options UI */}
                 {pollActive && (
                   <div className="mt-2 space-y-1">
@@ -358,7 +429,7 @@ function Community() {
                   </div>
                   <button
                     onClick={handleCreatePost}
-                    disabled={(!newPost.trim() && !pollActive) || posting || newPost.length > 500}
+                    disabled={(!newPost.trim() && !pollActive && !photo) || posting || newPost.length > 500 || (photo && (!photoPermission || !photoStatus.ready))}
                     className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2"
                   >
                     {posting ? (
@@ -368,7 +439,7 @@ function Community() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
                     )}
-                    Post
+                    {posting && photo ? 'Checking & publishing…' : 'Post'}
                   </button>
                 </div>
               </div>
@@ -445,6 +516,10 @@ function Community() {
                   <div className="px-4 py-3">
                     <p className="text-zinc-700 text-sm whitespace-pre-wrap">{post.content}</p>
 
+                    {post.media?.moderationStatus === 'approved' && post.media.url && <figure className="mt-3">
+                      <img src={post.media.url} alt="Travel photo shared by this post's author" loading="lazy" className="max-h-[32rem] w-full rounded-xl object-contain bg-slate-50" />
+                      <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500"><span>Automated photo check completed</span><button type="button" disabled={Boolean(reportedPhotos[post.id])} onClick={() => reportPhoto(post.id)} className="text-slate-500 underline disabled:no-underline">{reportedPhotos[post.id] ? 'Photo reported for review' : 'Report photo'}</button></figcaption>
+                    </figure>}
                     {/* Poll display */}
                     {post.poll && Array.isArray(post.poll) && post.poll.length > 1 && (
                       <div className="mt-3">

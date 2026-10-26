@@ -1,275 +1,87 @@
+import illustration from '../img/5.gif';
+import { Trash2, Plus, Loader2, ClipboardList } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { groupTodos } from '../utils/todoGroups';
+import Navbar from './Navbar';
+import { Button, Input, Label, NativeSelect } from './ui/form-controls';
+import { auth, db, onAuthStateChanged } from '../Firebase';
+import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
 
-import React, { useRef, useState, useEffect } from 'react'
-import Navbar from './Navbar'
-import { BsTrash } from "react-icons/bs";
-import logo4 from '../img/5.gif'
-import { db, auth } from '../Firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { 
-  collection, 
-  addDoc, 
-  deleteDoc, 
-  doc, 
-  onSnapshot, 
-  query, 
-  orderBy,
-  serverTimestamp 
-} from 'firebase/firestore';
-
-function Box(props) {
-  const items = props.data.map(
-    (singleData) => {
-      return <Item 
-        removeHandler={props.removeHandler} 
-        key={singleData.id} 
-        id={singleData.id} 
-        item={singleData.item} 
-        time={singleData.time} 
-      />
-    }
-  )
-  return (
-    <div className='p-2 sm:p-3 md:p-4'>
-      {items}
-    </div>
-  )
-}
-
-function Input(props) {
-  const inputBox = useRef();
-  const [loading, setLoading] = useState(false);
-
-  const handleAdd = async () => {
-    if (inputBox.current.value.trim() && !loading) {
-      setLoading(true);
-      await props.handler(inputBox.current.value);
-      inputBox.current.value = "";
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className='p-2 sm:p-3 md:p-4'>
-      <form onSubmit={(e) => { e.preventDefault(); handleAdd(); }} className="max-w-md mx-auto">
-        <label htmlFor="todo-input" className="mb-2 text-sm font-medium text-gray-900 sr-only">
-          Add Todo
-        </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-            <svg 
-              aria-hidden="true" 
-              className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24" 
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth="2" 
-                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-          </div>
-          <input 
-            type="text" 
-            id="todo-input"
-            placeholder='Whats on your list?' 
-            className='block w-full p-3 sm:p-4 pl-9 sm:pl-10 pr-20 sm:pr-24 text-sm sm:text-base text-gray-900 border border-gray-300 rounded-lg bg-white/90 backdrop-blur-sm focus:ring-zinc-500 focus:border-zinc-500 focus:outline-none shadow-lg' 
-            ref={inputBox}
-            onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
-            disabled={loading}
-          />
-          <button 
-            type="submit"
-            disabled={loading}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black hover:bg-zinc-800 text-white font-medium rounded-lg text-xs sm:text-sm px-3 py-2 sm:px-4 sm:py-2.5 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            ) : (
-              'Add'
-            )}
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-function Item(props) {
-  const [done, setDone] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  return (
-    <div 
-      onClick={() => setDone(!done)} 
-      className='select-none cursor-pointer w-full border-b p-2 sm:p-3 flex justify-between items-center hover:bg-gray-50 transition-colors duration-200'
-    >
-      <div className='flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2'>
-        <span className='text-xs sm:text-sm text-slate-400'>
-          {props.time}
-        </span>
-        <span className={`${done ? 'line-through text-gray-400' : ''} text-base sm:text-lg md:text-xl break-words`}>
-          {props.item}
-        </span>
-      </div>
-      <div 
-        onClick={async (e) => {
-          e.stopPropagation();
-          setDeleting(true);
-          await props.removeHandler(props.id);
-        }}
-        className='p-2 hover:bg-red-100 rounded-full transition-colors duration-200'
-      >
-        {deleting ? (
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
-        ) : (
-          <BsTrash className='text-[#e74c3c] text-lg sm:text-xl' />
-        )}
-      </div>
-    </div>
-  )
-}
-
-function Todolist() {
-  const [todos, setToDo] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function Todolist() {
+  const navigate=useNavigate(),route=useLocation();
+  const goBack=()=>{const origin=route.state?.checklistOrigin;if(origin?.path){navigate(origin.path,{replace:true,state:{restoreChecklistScroll:origin.scrollY||0}});}else if(window.history.state?.idx>0){navigate(-1);}else{const trip=params.get('trip');navigate(trip&&trip!=='general'?`/saved-trips?trip=${encodeURIComponent(trip)}`:'/saved-trips',{replace:true});}};
   const [user, setUser] = useState(null);
-  const [error, setError] = useState(null);
-
-  // Listen for auth state changes
+  const [todos, setTodos] = useState([]);
+  const [trips,setTrips]=useState([]),[tripsStatus,setTripsStatus]=useState('loading');
+  const [params,setParams]=useSearchParams();
+  const filter=params.get('trip')??'all';
+  const [tripId,setTripId]=useState(()=>params.get('trip')||'');
+  const [moving,setMoving]=useState(null);
+  useEffect(()=>{if(filter!=='all')setTripId(filter==='general'?'':filter);},[filter]);
+  useEffect(()=>{setTrips([]);setTripsStatus('loading');if(!user||!db)return;return onSnapshot(collection(db,'users',user.uid,'trips'),snapshot=>{setTrips(snapshot.docs.map(record=>({...record.data(),id:record.id})));setTripsStatus('ready');},()=>setTripsStatus('error'));},[user]);
+  const [item, setItem] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => onAuthStateChanged(auth, setUser), []);
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      
-      setUser(currentUser);
-      if (!currentUser) {
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribeAuth();
-  }, []);
-
-  // Listen to todos from Firestore
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    
-    
-    const todosRef = collection(db, 'users', user.uid, 'todos');
-    const q = query(todosRef, orderBy('createdAt', 'desc'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-     
-      const todosData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        time: doc.data().createdAt?.toDate().toLocaleTimeString() || 'Just now'
-      }));
-      setToDo(todosData);
-      setLoading(false);
-    }, (err) => {
-      
-      setError(err.message);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    setTodos([]);
+    if (!user || !db) return;
+    return onSnapshot(query(collection(db, 'users', user.uid, 'todos'), orderBy('createdAt', 'desc')), snapshot => setTodos(snapshot.docs.map(record => ({ id: record.id, ...record.data() }))), err => setError(err.message));
   }, [user]);
-
-  const removeToDo = async (id) => {
-    if (!user) return;
+  const add = async event => {
+    event.preventDefault();
+    if (busy || !item.trim()) return;
+    if (!user) { setError('Sign in to save your checklist.'); return; }
+    if(tripId&&!trips.some(trip=>trip.id===tripId)){setError('Choose an available trip or the General list.');return;}
+    setBusy(true); setError('');
     try {
-      await deleteDoc(doc(db, 'users', user.uid, 'todos', id));
-    } catch (err) {
-      
-      setError(err.message);
-    }
-  }
-
-  const addToDoHandler = async (item) => {
-    if (!user) {
-      setError("You must be logged in to add todos");
-      return;
-    }
+      await addDoc(collection(db, 'users', user.uid, 'todos'), { item: item.trim(), tripId:tripId||null, completed: false, createdAt: serverTimestamp() });
+      setItem('');
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+  const change = async (todo, remove = false) => {
     try {
-      
-      const todosRef = collection(db, 'users', user.uid, 'todos');
-      await addDoc(todosRef, {
-        item,
-        createdAt: serverTimestamp(),
-        completed: false
-      });
-      
-    } catch (err) {
-      
-      setError(err.message);
-    }
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col relative">
-      {/* Fixed Background Image */}
-      <div className="fixed inset-0 z-0">
-        <img 
-          src={logo4} 
-          className="w-full h-full object-cover opacity-30" 
-          alt="Background"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-white/50 to-white/70"></div>
+      const reference = doc(db, 'users', user.uid, 'todos', todo.id);
+      if (remove) await deleteDoc(reference); else await updateDoc(reference, { completed: !todo.completed });
+    } catch (err) { setError(err.message); }
+  };
+  const move=async(todo,nextTrip)=>{
+    if(!user||moving)return;
+    setMoving(todo.id);setError('');
+    try{await updateDoc(doc(db,'users',user.uid,'todos',todo.id),{tripId:nextTrip||null});}
+    catch{setError('Could not move this task. Please try again.');}
+    finally{setMoving(null);}
+  };
+  const groups=groupTodos(todos,trips).filter(group=>filter==='all'||group.id===(filter==='general'?'':filter));
+  const tripLabel=trip=>`${trip.destination||'Untitled trip'}${trip.startDate?` · ${trip.startDate}`:''}`;
+  return <div className="relative min-h-screen trip-page-background"><div aria-hidden="true" className="pointer-events-none fixed inset-0"><img src={illustration} alt="" className="todo-illustration h-full w-full object-cover opacity-20" /></div><Navbar onBack={goBack} backLabel="Back to previous page"/><main className="relative z-10 mx-auto max-w-3xl px-4 pb-28 pt-28">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3"><div><h1 className="font-serif text-2xl font-bold text-slate-900">Your trip checklists</h1><p className="mt-1 text-sm text-slate-500">Keep a separate list for every journey.</p></div><label className="text-xs text-slate-500">Show list<select aria-label="Filter checklist by trip" value={filter} onChange={e=>setParams(e.target.value==='all'?{}:{trip:e.target.value},{replace:true,state:route.state})} className="ml-2 max-w-[220px] rounded-lg border border-slate-200 bg-white p-2 text-sm"><option value="all">All lists</option><option value="general">General list</option>{trips.map(trip=><option key={trip.id} value={trip.id}>{tripLabel(trip)}</option>)}{filter!=='all'&&filter!=='general'&&!trips.some(trip=>trip.id===filter)&&<option value={filter}>Unavailable trip</option>}</select></label></div>
+    <form onSubmit={add} className="mx-auto mb-8 max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5 sm:p-6">
+      <div className="mb-5 flex items-center gap-3">
+        <span className="rounded-xl bg-blue-50 p-2.5 text-blue-600"><ClipboardList aria-hidden="true" size={20}/></span>
+        <div><h2 className="text-base font-semibold text-slate-900">One less thing to forget</h2><p className="mt-1 text-xs text-slate-500">Choose a list and add your next essential.</p></div>
       </div>
-
-      <Navbar />
-      
-      {/* Main content - positioned above background */}
-      <div className="flex-1 px-3 sm:px-4 md:px-6 lg:px-8 mt-16 sm:mt-20 pb-20 sm:pb-24 relative z-10">
-        {/* Error message */}
-        {error && (
-          <div className="mx-auto max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-4" role="alert">
-            <strong className="font-bold">Error: </strong>
-            <span className="block sm:inline">{error}</span>
-            <button onClick={() => setError(null)} className="float-right font-bold">×</button>
-          </div>
-        )}
-
-        {/* Not logged in message */}
-        {!user && !loading && (
-          <div className="mx-auto max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-yellow-100/90 backdrop-blur-sm border border-yellow-400 text-yellow-700 px-4 py-3 rounded mt-4" role="alert">
-            <span>Please log in to save your todos.</span>
-          </div>
-        )}
-
-        <div className="mx-auto max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl mt-4 sm:mt-6">
-          <Input handler={addToDoHandler} />
-          
-          {/* Loading state */}
-          {loading ? (
-            <div className="flex justify-center items-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            </div>
-          ) : (
-            <Box data={todos} removeHandler={removeToDo} />
-          )}
+      <div className="space-y-2">
+        <Label htmlFor="new-task-trip">Add to list</Label>
+        <NativeSelect id="new-task-trip" aria-label="Trip for new task" value={tripId} onChange={e=>setTripId(e.target.value)}>
+          <option value="">General list</option>
+          {trips.map(trip=><option key={trip.id} value={trip.id}>{tripLabel(trip)}</option>)}
+          {tripId&&!trips.some(trip=>trip.id===tripId)&&<option value={tripId}>Unavailable trip</option>}
+        </NativeSelect>
+      </div>
+      {tripsStatus==='error'&&<p role="status" className="mt-3 text-xs text-amber-700">Could not load your trips. General-list tasks are still available.</p>}
+      <div className="mt-4 space-y-2">
+        <Label htmlFor="todo-input">What do you need?</Label>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Input required maxLength={500} id="todo-input" value={item} onChange={event=>setItem(event.target.value)} placeholder="e.g. Pack a rain jacket" className="flex-1"/>
+          <Button type="submit" disabled={busy}>{busy?<Loader2 aria-hidden="true" size={16} className="motion-safe:animate-spin"/>:<Plus aria-hidden="true" size={16}/>} {busy?'Adding…':'Add'}</Button>
         </div>
-
-        {/* Empty state message */}
-        {!loading && todos.length === 0 && (
-          <div className="text-center mt-6">
-            <div className="rounded-xl p-6 mx-auto max-w-sm">
-              <p className="text-gray-600 text-lg font-medium">Your list is empty</p>
-              <p className="text-gray-400 mt-1 text-sm">Add your first task above!</p>
-            </div>
-          </div>
-        )}
       </div>
-    </div>
-  )
+    </form>
+    {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {!user && <p className="mb-4 text-center text-sm text-slate-500">Sign in to save your list.</p>}
+    <div className="space-y-5">{groups.map(group=><section key={group.id||'general'} aria-label={`${group.title} checklist`} className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-4 sm:px-5"><header className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-slate-900">{group.title}</h2><p className="mt-1 text-xs text-slate-500">{group.items.filter(todo=>!todo.completed).length} remaining · {group.items.length} tasks{group.trip?.startDate?` · ${group.trip.startDate}`:''}</p></div>{group.trip&&<Link to={`/saved-trips?trip=${encodeURIComponent(group.id)}`} className="text-xs font-semibold text-blue-700">Open trip ↗</Link>}</header><ul>{group.items.map(todo=><li key={todo.id} className="flex items-center gap-3 border-b border-slate-200/70 py-3 last:border-0"><input type="checkbox" aria-label={`Complete ${todo.item}`} checked={!!todo.completed} onChange={()=>change(todo)} className="h-4 w-4 shrink-0 accent-blue-600"/><div className="min-w-0 flex-1"><p className={`break-words text-base ${todo.completed?'text-slate-400 line-through':'text-slate-900'}`}>{todo.item}</p><label className="mt-2 block text-[11px] text-slate-500">Move to<select aria-label={`List for ${todo.item}`} value={todo.tripId||''} disabled={moving===todo.id} onChange={e=>move(todo,e.target.value)} className="ml-2 max-w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"><option value="">General list</option>{trips.map(trip=><option key={trip.id} value={trip.id}>{tripLabel(trip)}</option>)}{todo.tripId&&!trips.some(trip=>trip.id===todo.tripId)&&<option value={todo.tripId}>Unavailable trip</option>}</select></label></div><button type="button" aria-label={`Delete ${todo.item}`} onClick={()=>change(todo,true)} className="rounded-full p-3 text-red-600 hover:bg-red-50"><Trash2 size={19}/></button></li>)}</ul></section>)}</div>
+    {user&&groups.length===0&&<p className="mt-10 text-center text-sm text-slate-500">This list is empty. Add your first task above.</p>}
+  </main></div>;
 }
-
-export default Todolist
