@@ -1,8 +1,8 @@
 
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { onAuthStateChanged } from '../Firebase';
-import { auth } from '../Firebase';
+import { onAuthStateChanged } from '../firebaseAuth';
+import { auth } from '../firebaseAuth';
 
 import Navbar from './Navbar';
 import DestinationAutocomplete from './DestinationAutocomplete';

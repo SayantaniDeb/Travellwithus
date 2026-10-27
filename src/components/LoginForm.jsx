@@ -1,11 +1,12 @@
 import BackButton from './BackButton';
+import { consumePlannerReturn } from '../utils/authReturn';
 import ThemeToggle from './ThemeToggle';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { auth, provider, db } from '../Firebase';
-import { signInWithPopup, signInWithRedirect, getRedirectResult, createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
+import { signInWithPopup, getRedirectResult, createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import logo1 from '../img/54.jpg';
-import { Button } from '@material-tailwind/react';
+
 import { useNavigate } from 'react-router-dom';
 
 // Random avatar styles from DiceBear
@@ -56,7 +57,6 @@ function LoginForm() {
   const [value, setValue] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [useRedirect, setUseRedirect] = useState(false)
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -65,6 +65,9 @@ function LoginForm() {
   const [showVerificationMessage, setShowVerificationMessage] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState('')
   const navigate = useNavigate();
+  const finishSignIn = useCallback(() => {
+    navigate(consumePlannerReturn(sessionStorage), { replace: true });
+  }, [navigate]);
 
   // Check for redirect result on component mount
   useEffect(() => {
@@ -77,30 +80,19 @@ function LoginForm() {
           localStorage.setItem("displayName", result.user.displayName || result.user.email?.split('@')[0] || 'User')
           // Create user profile with random avatar if new user
           await createUserProfile(result.user)
-          navigate('/home')
+          finishSignIn()
         }
       })
       .catch((error) => {
         console.error('Redirect sign-in error:', error)
-        if (error.code === 'auth/popup-blocked' || error.message.includes('disallowed_useragent')) {
-          setUseRedirect(true)
-        }
+        setError('The browser could not restore your sign-in session. Open this site in Safari or Chrome and sign in again.')
       })
-  }, [navigate])
+  }, [finishSignIn])
 
   const handleClick = () => {
     setLoading(true)
     setError('')
     
-    if (useRedirect) {
-      // Use redirect method for mobile browsers
-      signInWithRedirect(auth, provider)
-        .catch((error) => {
-          console.error('Redirect sign-in error:', error)
-          setLoading(false)
-          setError('Failed to start sign-in process. Please try again.')
-        })
-    } else {
       // Try popup method first
       signInWithPopup(auth, provider)
         .then(async (data) => {
@@ -109,7 +101,7 @@ function LoginForm() {
           localStorage.setItem("displayName", data.user.displayName || data.user.email?.split('@')[0] || 'User')
           // Create user profile with random avatar if new user
           await createUserProfile(data.user)
-          navigate('/home')
+          finishSignIn()
         })
         .catch((error) => {
           console.error('Login error:', error)
@@ -117,20 +109,17 @@ function LoginForm() {
           
           // Handle specific Firebase Auth errors
           if (error.code === 'auth/popup-blocked') {
-            setError('Popup was blocked. Switching to redirect mode - you\'ll be redirected to Google and back.')
-            setUseRedirect(true)
+            setError('Allow sign-in popups and try again. If you opened this link inside X/Twitter or another app, use its menu to open this site in Safari or Chrome.')
           } else if (error.code === 'auth/popup-closed-by-user') {
             setError('Sign-in was cancelled. Please try again.')
           } else if (error.code === 'auth/cancelled-popup-request') {
             setError('Another sign-in request is in progress. Please wait.')
-          } else if (error.message.includes('disallowed_useragent')) {
+          } else if (error.message?.includes('disallowed_useragent')) {
             setError('This browser is not supported for sign-in. Please open this app in a standard web browser like Chrome, Safari, or Firefox.')
-            setUseRedirect(true)
           } else {
             setError('Sign-in failed. Please try again or contact support.')
           }
         })
-    }
   }
 
   const handleForgotPassword = async () => {
@@ -264,7 +253,7 @@ function LoginForm() {
         localStorage.setItem("displayName", result.user.displayName || result.user.email?.split('@')[0] || 'User')
         // Create user profile if doesn't exist (for existing users)
         await createUserProfile(result.user)
-        navigate('/home')
+        finishSignIn()
       } catch (error) {
         console.error('Sign in error:', error)
         setLoading(false)
@@ -346,20 +335,6 @@ function LoginForm() {
               Plan your perfect journey
             </p>
             
-            {useRedirect && (
-              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 sm:px-4 py-3 rounded-lg mb-3 sm:mb-4 text-xs sm:text-sm">
-                <div className="flex items-start">
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                  <div>
-                    <p className="font-medium text-xs sm:text-sm">Redirect Mode Active</p>
-                    <p className="mt-1 text-xs sm:text-sm">You'll be redirected to Google for sign-in, then brought back here automatically.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-3 rounded-lg mb-3 sm:mb-4 text-xs sm:text-sm">
                 <div className="flex items-start">
@@ -512,15 +487,13 @@ function LoginForm() {
             </div>
 
             <div className="space-y-2 sm:space-y-3">
-              <Button
-                color="blue"
-                ripple={true}
-                className="w-full py-3 sm:py-3.5 text-xs sm:text-sm md:text-base font-semibold rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              <button
+                className="w-full bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:opacity-50 py-3 sm:py-3.5 text-xs sm:text-sm md:text-base font-semibold rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 onClick={handleClick}
                 disabled={loading}
               >
-                {loading ? 'Signing in...' : useRedirect ? 'Continue with Google' : 'Sign in with Google'}
-              </Button>
+                {loading ? 'Signing in...' : 'Sign in with Google'}
+              </button>
 
             </div>
           </div>

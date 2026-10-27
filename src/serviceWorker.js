@@ -36,7 +36,7 @@ export function register() {
       if (event.data && event.data.type === 'CACHE_UPDATED') {
         console.log(`[App] New version available: ${event.data.version}`);
         // Auto-reload to get new version
-        window.location.reload();
+        window.dispatchEvent(new CustomEvent('travel-update-available'));
       }
     });
   }
@@ -60,7 +60,7 @@ function registerValidSW(swUrl) {
             if (navigator.serviceWorker.controller) {
               // New content is available - force reload
               console.log('[SW] New content available, reloading...');
-              window.location.reload();
+              window.dispatchEvent(new CustomEvent('travel-update-available'));
             } else {
               // Content is cached for offline use.
               console.log('[SW] Content cached for offline use.');
@@ -86,7 +86,7 @@ function checkValidServiceWorker(swUrl) {
       ) {
         navigator.serviceWorker.ready.then((registration) => {
           registration.unregister().then(() => {
-            window.location.reload();
+            window.dispatchEvent(new CustomEvent('travel-update-available'));
           });
         });
       } else {

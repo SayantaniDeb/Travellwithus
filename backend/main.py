@@ -1,11 +1,12 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any
 import httpx
 import os
 import sys
 import logging
+import secrets
 from dotenv import load_dotenv
 
 # Configure logging
@@ -28,12 +29,14 @@ from community_images import router as community_images_router
 app.include_router(community_images_router)
 
 # CORS configuration
+from api_safety import PublicApiGuard
+app.add_middleware(PublicApiGuard)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173", "*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://travellwith02.netlify.app").split(",") if origin.strip() and origin.strip() != "*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Key"],
 )
 
 # API Keys from environment variables
@@ -45,18 +48,30 @@ MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN")
 
 # ============ Request Models ============
 
+def require_admin(x_admin_key: str = Header(default="")):
+    expected = os.getenv("ADMIN_API_KEY", "")
+    if not expected or not secrets.compare_digest(x_admin_key, expected):
+        raise HTTPException(status_code=403, detail="Administrator access required")
+
+
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: str = Field(pattern="^(system|user|assistant)$")
+    content: str = Field(min_length=1, max_length=64000)
 
 class CompletionRequest(BaseModel):
-    model: str
-    messages: List[ChatMessage]
-    max_tokens: Optional[int] = 4000
-    temperature: Optional[float] = 0.7
-    provider: Optional[str] = "groq"
-    feature_hint: Optional[str] = None  # Optional hint: "itinerary", "hotel", "budget", etc.
-    use_cache: Optional[bool] = True
+    model: str = Field(min_length=1, max_length=120)
+    messages: List[ChatMessage] = Field(min_length=1, max_length=64)
+    max_tokens: int = Field(default=4000, ge=1, le=12000)
+    temperature: float = Field(default=0.7, ge=0, le=2, allow_inf_nan=False)
+    provider: str = Field(default="groq", pattern="^(groq|openai|gemini)$")
+    feature_hint: Optional[str] = Field(default=None, max_length=80)
+    use_cache: bool = True
+
+    @model_validator(mode="after")
+    def bounded_prompt(self):
+        if sum(len(message.content) for message in self.messages) > 128000:
+            raise ValueError("Combined messages exceed the prompt limit")
+        return self
 
 
 # ============ Smart LLM Completions with Multi-Model Routing ============
@@ -112,7 +127,7 @@ async def smart_completions(request: CompletionRequest):
 
 # ============ Legacy Direct Completions (Backward Compatible) ============
 
-@app.post("/api/completions/direct")
+@app.post("/api/completions/direct", dependencies=[Depends(require_admin)])
 async def direct_completions(request: CompletionRequest):
     """Direct proxy without smart routing (for debugging)"""
     
@@ -151,7 +166,7 @@ async def direct_completions(request: CompletionRequest):
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Request timed out")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="The upstream service could not complete this request")
 
 
 # ============ Weather API Proxy ============
@@ -185,7 +200,7 @@ async def fallback_weather(q, lat, lon):
 
 
 @app.get("/api/weather")
-async def proxy_weather(q: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None):
+async def proxy_weather(q: Optional[str] = Query(default=None, max_length=120), lat: Optional[float] = Query(default=None, ge=-90, le=90), lon: Optional[float] = Query(default=None, ge=-180, le=180)):
     """Return weather or a meaningful HTTP error; never mask provider errors as success."""
     if not OPENWEATHER_API_KEY:
         return await fallback_weather(q, lat, lon)
@@ -229,7 +244,7 @@ def destination_suggestions(q: str = Query(default="", max_length=120)):
 # ============ Geocoding API Proxy ============
 
 @app.get("/api/geocode")
-async def proxy_geocode(lng: float, lat: float):
+async def proxy_geocode(lng: float = Query(ge=-180, le=180), lat: float = Query(ge=-90, le=90)):
     """Proxy endpoint for Mapbox reverse geocoding"""
     
     if not MAPBOX_ACCESS_TOKEN:
@@ -244,7 +259,7 @@ async def proxy_geocode(lng: float, lat: float):
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Request timed out")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="The upstream service could not complete this request")
 
 
 # ============ Health Check ============
@@ -263,26 +278,26 @@ async def health_check():
 
 # ============ Router Status & Metrics ============
 
-@app.get("/api/router/status")
+@app.get("/api/router/status", dependencies=[Depends(require_admin)])
 async def router_status():
     """Get AI router status including rate limits and cache stats"""
     return ai_router.get_status()
 
 
-@app.get("/api/router/metrics")
-async def router_metrics(limit: int = 100):
+@app.get("/api/router/metrics", dependencies=[Depends(require_admin)])
+async def router_metrics(limit: int = Query(default=100, ge=1, le=1000)):
     """Get recent routing metrics for observability"""
     return ai_router.get_metrics(limit)
 
 
-@app.post("/api/cache/invalidate")
+@app.post("/api/cache/invalidate", dependencies=[Depends(require_admin)])
 async def invalidate_cache(feature_type: Optional[str] = None):
     """Invalidate cache entries"""
     semantic_cache.invalidate(feature_type)
     return {"status": "ok", "invalidated": feature_type or "all"}
 
 
-@app.get("/api/rate-limits")
+@app.get("/api/rate-limits", dependencies=[Depends(require_admin)])
 async def get_rate_limits():
     """Get current rate limit status for all models"""
     return rate_limiter.get_all_status()

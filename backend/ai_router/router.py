@@ -106,6 +106,8 @@ class AIRouter:
         feature_type = classifier.classify_fast(messages, endpoint_hint)
         logger.info(f"[{request_id}] Classified as: {feature_type.value}")
         
+        cache_params = {**(cache_params or {}), "_generation": {"max_tokens": max_tokens, "temperature": temperature}}
+
         # Step 2: Check cache (for cacheable features)
         if use_cache and feature_type in [FeatureType.TRIP_ITINERARY, FeatureType.HOTEL_RECOMMENDATION]:
             cached = semantic_cache.get(messages, feature_type.value, cache_params)

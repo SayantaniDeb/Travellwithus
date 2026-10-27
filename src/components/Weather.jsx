@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import CityComponent from "./modules/CityComponent";
 import WeatherComponent from "./modules/WeatherInfoComponent";
 import Navbar from "./Navbar";
-import { Button } from "@material-tailwind/react";
+
 import { useLocation } from "../context/LocationContext";
 
 // API URL from environment variable
@@ -124,12 +124,12 @@ function Weather() {
                 </div>
               )}
               <WeatherComponent weather={weather} />
-              <Button 
+              <button
                 onClick={handleBackClick}
-                className="mt-4 sm:mt-6 w-full sm:w-auto px-6 py-2 sm:py-3"
+                className="mt-4 sm:mt-6 w-full sm:w-auto rounded-xl bg-blue-600 text-white px-6 py-2 sm:py-3"
               >
                 Search Another City
-              </Button>
+              </button>
             </div>
           ) : !isInitialLoading && (
             <CityComponent 

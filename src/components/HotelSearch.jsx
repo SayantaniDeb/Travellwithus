@@ -1,3 +1,4 @@
+import { safeExternalUrl } from '../utils/safeUrl';
 import BackButton from './BackButton';
 import { plannerReturnPath } from '../utils/tripNavigation';
 import { readPlanningResponse } from '../utils/planningResponse';
@@ -893,9 +894,13 @@ Return ONLY valid JSON:
       });
 
       // Remove duplicates based on hotel name
-      const uniqueHotels = sortedHotels.filter((hotel, index, self) =>
-        index === self.findIndex(h => h.name.toLowerCase() === hotel.name.toLowerCase())
-      );
+      const seenNames = new Set();
+      const uniqueHotels = sortedHotels.filter(hotel => {
+        const name = hotel.name.toLowerCase();
+        if (seenNames.has(name)) return false;
+        seenNames.add(name);
+        return true;
+      });
 
       // Calculate and update budget relevance labels based on actual budget fit
       const hotelsWithBudgetLabels = uniqueHotels.map(hotel => {
@@ -1074,7 +1079,7 @@ Return ONLY valid JSON:
                     <div className="flex gap-2">
                       {hotel.bookingLink && (
                         <a
-                          href={hotel.bookingLink}
+                          href={safeExternalUrl(hotel.bookingLink) || undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"

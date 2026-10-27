@@ -1,0 +1,36 @@
+{
+  "before": {
+    "performance_scores": [
+      35,
+      35,
+      35
+    ],
+    "performance_median": 35.0,
+    "categories": {
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 100
+    },
+    "lcp_ms": 9552.53692,
+    "cls": 0.6353749128841849,
+    "tbt_ms": 0,
+    "script_transfer_bytes": 1258528
+  },
+  "after": {
+    "performance_scores": [
+      68,
+      65,
+      64
+    ],
+    "performance_median": 65.0,
+    "categories": {
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 100
+    },
+    "lcp_ms": 6660.6348,
+    "cls": 0.00118469338307679,
+    "tbt_ms": 151.5,
+    "script_transfer_bytes": 827776
+  }
+}

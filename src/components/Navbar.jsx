@@ -6,7 +6,7 @@ import { Disclosure, Menu, Transition } from '@headlessui/react'
 import { Bars3Icon, BellIcon, XMarkIcon, ArrowRightOnRectangleIcon, DocumentTextIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { NavLink, useNavigate, useLocation as useRouterLocation } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
-import { auth } from '../Firebase'
+import { auth } from '../firebaseAuth'
 import { useProfileIdentity } from '../context/ProfileContext'
 import { useLocation } from '../context/LocationContext'
 import {

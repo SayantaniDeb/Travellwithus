@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
+import Spinner from './ui/Spinner';
+import LoadingImage from './ui/LoadingImage';
 import { Plus, X, ChartNoAxesColumnIncreasing } from 'lucide-react';
 import { db, auth } from '../Firebase';
 import { onAuthStateChanged } from '../Firebase';
@@ -38,22 +40,51 @@ function Community() {
   const textareaRef = useRef(null);
   const replyInputRef = useRef(null);
   const photoInputRef = useRef(null);
+  const [choosingPhoto, setChoosingPhoto] = useState(false);
+  const [postStage, setPostStage] = useState('');
+  const [slowPost, setSlowPost] = useState(false);
   const [photo, setPhoto] = useState(null);
   const [photoPermission, setPhotoPermission] = useState(false);
+  const [checkingPhotoStatus, setCheckingPhotoStatus] = useState(true);
   const [photoStatus, setPhotoStatus] = useState({ ready: false, message: 'Checking photo availability…' });
   const [postError, setPostError] = useState('');
   const [reportedPhotos, setReportedPhotos] = useState({});
 
   useEffect(() => {
     const controller = new AbortController();
+    let active = true;
+    const timer = setTimeout(() => controller.abort(), 15000);
     fetch(`${API_URL}/api/community/image-status`, { signal: controller.signal })
       .then(response => { if (!response.ok) throw new Error(); return response.json(); })
-      .then(setPhotoStatus).catch(() => { if (!controller.signal.aborted) setPhotoStatus({ ready: false, message: 'Photo posting is unavailable. You can still share text and polls.' }); });
-    return () => controller.abort();
+      .then(status => { if (active) setPhotoStatus(status); })
+      .catch(() => { if (active) setPhotoStatus({ ready: false, message: 'Photo posting is unavailable. You can still share text and polls.' }); })
+      .finally(() => { clearTimeout(timer); if (active) setCheckingPhotoStatus(false); });
+    return () => { active = false; clearTimeout(timer); controller.abort(); };
   }, []);
   useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.preview); }, [photo]);
 
+  useEffect(() => {
+    const input = photoInputRef.current;
+    const cancelled = () => setChoosingPhoto(false);
+    input?.addEventListener('cancel', cancelled);
+    return () => input?.removeEventListener('cancel', cancelled);
+  }, [user]);
+  useEffect(() => {
+    if (!choosingPhoto) return;
+    // Older embedded browsers may return focus without dispatching input cancel.
+    const returned = () => setChoosingPhoto(false);
+    window.addEventListener('focus', returned);
+    return () => window.removeEventListener('focus', returned);
+  }, [choosingPhoto]);
+  useEffect(() => {
+    setSlowPost(false);
+    if (!posting) return;
+    const timer = setTimeout(() => setSlowPost(true), 10000);
+    return () => clearTimeout(timer);
+  }, [posting]);
+
   const selectPhoto = event => {
+    setChoosingPhoto(false);
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -66,13 +97,23 @@ function Community() {
 
   const photoRequest = async (path, method = 'POST', payload) => {
     const token = await user.getIdToken();
-    const response = await fetch(`${API_URL}/api/community/${path}`, {
-      method, headers: { Authorization: `Bearer ${token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
-      ...(payload ? { body: JSON.stringify(payload) } : {})
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Photo posting could not complete. Please try again.');
-    return data;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90000);
+    try {
+      const response = await fetch(`${API_URL}/api/community/${path}`, {
+        method, signal: controller.signal,
+        headers: { Authorization: `Bearer ${token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
+        ...(payload ? { body: JSON.stringify(payload) } : {})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Photo posting could not complete. Please try again.');
+      return data;
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('The photo request took too long. Your draft is kept. Check the feed before trying again in case it was published.');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   const reportPhoto = async postId => {
@@ -151,6 +192,7 @@ function Community() {
     if ((!newPost.trim() && !pollActive && !photo) || !user || posting || (photo && (!photoPermission || !photoStatus.ready))) return;
 
     setPosting(true);
+    setPostStage(photo ? 'Preparing photo…' : 'Publishing…');
     setPostError('');
     try {
       // Use profile data if available, otherwise fallback to auth data
@@ -169,6 +211,7 @@ function Community() {
           reader.onerror = () => reject(new Error('The photo could not be read. Please select it again.'));
           reader.readAsDataURL(photo.file);
         });
+        setPostStage('Checking & publishing…');
         await photoRequest('image-post', 'POST', { image: encoded, content: newPost.trim(), permission: photoPermission, poll: poll ? poll.map(option => option.option) : [] });
       } else {
       await addDoc(collection(db, 'community_posts'), {
@@ -388,7 +431,7 @@ function Community() {
                 />
                 <div className="flex items-center gap-2 mt-2">
                   <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectPhoto} disabled={posting} className="hidden" aria-label="Choose a community photo" />
-                  <button type="button" disabled={posting} onClick={() => photoInputRef.current?.click()} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:opacity-50">Add photo</button>
+                  <button type="button" disabled={posting} aria-busy={choosingPhoto || (posting && !!photo)} onClick={() => { setChoosingPhoto(true); photoInputRef.current?.click(); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:opacity-50">{(choosingPhoto || (posting && photo)) && <Spinner/>}{choosingPhoto ? 'Choosing photo…' : posting && photo ? 'Processing…' : 'Add photo'}</button>
                   {/* Poll toggle */}
                   <button type="button" disabled={posting} aria-pressed={pollActive} className={`inline-flex items-center rounded-lg border border-transparent px-3 py-2 text-xs font-medium transition ${pollActive ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500 hover:bg-blue-50'}`} onClick={() => setPollActive(v => !v)}>
                     <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 17v-6m4 6V7m4 10v-3" /></svg>
@@ -397,12 +440,13 @@ function Community() {
                 </div>
                 {photo && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2"><p className="text-xs font-medium text-slate-600">Local preview · not uploaded yet</p><button type="button" disabled={posting} onClick={() => { setPhoto(null); setPhotoPermission(false); }} className="rounded-lg px-2 py-1 text-xs text-red-600">Remove photo</button></div>
-                  <img src={photo.preview} alt="Selected community photo preview" className="max-h-64 w-full rounded-lg object-contain" />
+                  <LoadingImage src={photo.preview} alt="Selected community photo preview" className="min-h-32 max-h-64 w-full rounded-lg object-contain" />
                   <label className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-slate-600"><input type="checkbox" checked={photoPermission} disabled={posting} onChange={event => setPhotoPermission(event.target.checked)} className="mt-0.5" /><span>I own this photo or have permission to share it, including consent from identifiable people pictured.</span></label>
                   <p className="mt-2 text-[11px] leading-relaxed text-slate-500">Before publishing, the photo and caption are sent to OpenAI for an automated safety check. Location metadata is removed. Checks may miss unwanted content; they cannot verify consent.</p>
-                  <p role="status" className={`mt-2 text-xs ${photoStatus.ready ? 'text-slate-500' : 'text-amber-700'}`}>{photoStatus.message}</p>
+                  <p role="status" className={`mt-2 flex items-center gap-2 text-xs ${photoStatus.ready ? 'text-slate-500' : 'text-amber-700'}`}>{checkingPhotoStatus && <Spinner/>}{photoStatus.message}</p>
                 </div>}
                 {postError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{postError}</p>}
+                {posting && <p role="status" aria-live="polite" className="mt-3 flex items-center gap-2 text-xs text-blue-600"><Spinner/>{slowPost ? 'Still working. Photo checks can take a little longer; please keep this page open.' : postStage}</p>}
                 {/* Poll options UI */}
                 {pollActive && (
                   <section aria-label="Poll options" className="community-poll-editor mt-3 rounded-2xl border border-blue-100 bg-slate-50 p-3 sm:p-4">
@@ -429,18 +473,19 @@ function Community() {
                     {newPost.length}/500
                   </div>
                   <button
+                    aria-busy={posting}
                     onClick={handleCreatePost}
                     disabled={(!newPost.trim() && !pollActive && !photo) || posting || newPost.length > 500 || (photo && (!photoPermission || !photoStatus.ready))}
                     className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2"
                   >
                     {posting ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <Spinner/>
                     ) : (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
                     )}
-                    {posting && photo ? 'Checking & publishing…' : 'Post'}
+                    {posting ? postStage : 'Post'}
                   </button>
                 </div>
               </div>
@@ -518,7 +563,7 @@ function Community() {
                     <p className="text-zinc-700 text-sm whitespace-pre-wrap">{post.content}</p>
 
                     {post.media?.moderationStatus === 'approved' && post.media.url && <figure className="mt-3">
-                      <img src={post.media.url} alt="Travel photo shared by this post's author" loading="lazy" className="max-h-[32rem] w-full rounded-xl object-contain bg-slate-50" />
+                      <LoadingImage src={post.media.url} alt="Travel photo shared by this post's author" loading="lazy" className="min-h-32 max-h-[32rem] w-full rounded-xl object-contain bg-slate-50" />
                       <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500"><span>Automated photo check completed</span><button type="button" disabled={Boolean(reportedPhotos[post.id])} onClick={() => reportPhoto(post.id)} className="text-slate-500 underline disabled:no-underline">{reportedPhotos[post.id] ? 'Photo reported for review' : 'Report photo'}</button></figcaption>
                     </figure>}
                     {/* Poll display */}

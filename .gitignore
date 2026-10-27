@@ -31,3 +31,6 @@ dist
 *firebase-adminsdk*.json
 
 __pycache__/
+
+# Rendered launch video artifacts
+/out/

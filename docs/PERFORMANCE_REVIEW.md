@@ -1,3 +1,5 @@
+> Updated review: [27 October security and performance pass](../reports/security-performance/REVIEW.md). Measurements below are historical.
+
 # Performance review — 26 October 2026
 
 Scope: frontend startup, route loading, home animations, budget ledger rendering/subscriptions, day numbering, and mobile viewport handlers. This is a targeted review, not a claim that every backend and frontend path has been profiled.

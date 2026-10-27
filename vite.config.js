@@ -1,26 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import viteImagemin from 'vite-plugin-imagemin';
 import { visualizer } from 'rollup-plugin-visualizer';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
-    viteImagemin({
-      gifsicle: { optimizationLevel: 7, interlaced: false },
-      optipng: { optimizationLevel: 7 },
-      mozjpeg: { quality: 75 },
-      pngquant: { quality: [0.7, 0.9], speed: 3 },
-      svgo: { plugins: [{ name: 'removeViewBox', active: false }] },
-      webp: { quality: 75 },
-      avif: { quality: 50 }
-    }),
-    visualizer({ open: false, filename: 'dist/bundle-analysis.html' })
+    ...(process.env.ANALYZE === 'true' ? [visualizer({ open: false, filename: 'dist/bundle-analysis.html' })] : [])
   ],
   server: {
     port: 3000,
-    open: true,
+    open: false,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
@@ -38,12 +28,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            return id.toString().split('node_modules/')[1].split('/')[0].toString();
-          }
+          if (!id.includes('node_modules')) return;
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-vendor';
         }
-      },
-      plugins: [visualizer({ open: false, filename: 'dist/bundle-analysis.html' })]
+      }
     }
   },
   define: {

@@ -1,4 +1,6 @@
 import LoadingSpinner from './LoadingSpinner';
+import { mapConcurrent } from '../utils/mapConcurrent';
+import { rememberPlannerReturn } from '../utils/authReturn';
 import { cleanLocationName } from '../utils/locationName';
 import { parseEstimatedCost } from '../utils/tripBudget';
 import { itineraryDayLabel } from '../utils/dayLabels';
@@ -163,6 +165,20 @@ export default function TripPlanner() {
     sessionStorage.setItem(cacheKey, JSON.stringify(stateToCache));
   }, [step, startDate, endDate, sourceLocation, budgetAmount, includeHotels, includeTravel, plan, selectedDay, currency, cacheKey, hydratedKey]);
 
+  const signInAndResume = () => {
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({ step, startDate, endDate, sourceLocation, budgetAmount, includeHotels, includeTravel, plan, selectedDay, currency }));
+      const params = new URLSearchParams(routeLocation.search);
+      params.set('destination', destination);
+      rememberPlannerReturn(sessionStorage, `/plan-trip?${params.toString()}`);
+      navigate('/login');
+    } catch {
+      setShowSignInPopup(false);
+      setShowHotelPopup(false);
+      setError('Could not preserve your trip for sign-in. Your itinerary is still here. Please enable browser storage and retry.');
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -172,6 +188,7 @@ export default function TripPlanner() {
 
   // Set currency and source location based on user's location
   useEffect(() => {
+    if (hydratedKey !== cacheKey || plan) return;
     if (cleanLocationName(locationName)) {
       const detectedCurrency = getCurrencyFromLocation(locationName);
       setCurrency(detectedCurrency);
@@ -180,7 +197,7 @@ export default function TripPlanner() {
         setSourceLocation(cleanLocationName(locationName));
       }
     }
-  }, [locationName]);
+  }, [locationName, hydratedKey, cacheKey, Boolean(plan)]);
 
   const calculateDays = () => {
     if (!startDate || !endDate) return 0;
@@ -340,26 +357,8 @@ ${refreshing ? `Generate a different itinerary from these previous activities: $
         // Planning Agent: Generate basic plan without costs
         text = await callAI('openai/gpt-oss-20b', prompt, 6000, { useCache: !refreshing });
 
-      } else if (LLM_PROVIDER === 'openai') {
-        // Planning Agent: Generate basic plan without costs
+      } else {
         text = await callAI('gpt-4o', prompt, 6000);
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        if (!apiKey) throw new Error('Gemini API key not configured');
-
-        response = await fetch(
-          `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }]
-            })
-          }
-        );
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
-        text = data.candidates?.[0]?.content?.parts?.[0]?.text;
       }
 
       if (text) {
@@ -432,9 +431,8 @@ ${refreshing ? `Generate a different itinerary from these previous activities: $
 
         // Cost Agent: Add detailed cost breakdowns for each day (only if budget tracking is needed)
         if (Array.isArray(planData.days) && (includeHotels || includeTravel || budgetAmount)) {
-          for (let i = 0; i < planData.days.length; i++) {
-            const day = planData.days[i];
-            if (day.travelReservation) continue;
+          await mapConcurrent(planData.days, 2, async (day, i) => {
+            if (day.travelReservation) return;
             const costPrompt = `For this day in ${destination}: ${day.title} - ${day.summary}
 
 Morning: ${day.morning.activity} at ${day.morning.location}
@@ -458,13 +456,11 @@ Provide realistic mid-range cost breakdown in ${currency} (${currencySymbol}) fo
               day.estimatedCost = costData.totalDayCost;
             } catch (err) {
               console.error('Error getting costs for day', i+1, err);
-              // Fallback costs
-              if (day.morning) day.morning.estimatedCost = `${currencySymbol}100 (est.)`;
-              if (day.afternoon) day.afternoon.estimatedCost = `${currencySymbol}150 (est.)`;
-              if (day.evening) day.evening.estimatedCost = `${currencySymbol}200 (est.)`;
-              day.estimatedCost = `${currencySymbol}450 (est.)`;
+              // A failed estimate must remain missing rather than inventing a price.
+              for (const period of ['morning', 'afternoon', 'evening']) if (day[period]) day[period].estimatedCost = null;
+              day.estimatedCost = null;
             }
-          }
+          });
         }
 
         // --- BUDGET VS COST COMPARISON (WARNING ONLY, NOT BLOCKING) ---
@@ -875,7 +871,7 @@ Offer different real activities with morning, afternoon and evening objects. Eac
 
                 <div className="flex flex-col w-full space-y-2">
                   <button
-                    onClick={() => navigate('/login')}
+                    onClick={signInAndResume}
                     className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full"
                   >
                     Sign In
@@ -923,7 +919,7 @@ Offer different real activities with morning, afternoon and evening objects. Eac
 
                 <div className="flex flex-col w-full space-y-2">
                   <button
-                    onClick={() => navigate('/login')}
+                    onClick={signInAndResume}
                     className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full"
                   >
                     Sign In & Save Trip

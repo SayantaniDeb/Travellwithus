@@ -1,0 +1,18 @@
+{
+  "records": 161914,
+  "queries": [
+    "kol",
+    "agra",
+    "goa",
+    "manali",
+    "paris",
+    "tokyo",
+    "london",
+    "mumbai",
+    "delhi",
+    "udaipur"
+  ],
+  "median_scan_ms": 19.018791965208948,
+  "median_indexed_ms": 0.06695848423987627,
+  "note": "Warm GeoNames index, uncached query; scan timing excludes ranking and is a conservative comparison."
+}

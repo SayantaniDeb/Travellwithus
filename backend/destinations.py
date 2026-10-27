@@ -1,5 +1,6 @@
 """Local GeoNames autocomplete for countries, cities and towns."""
 from functools import lru_cache
+from bisect import bisect_left
 from heapq import nsmallest
 import unicodedata
 import geonamescache
@@ -27,15 +28,24 @@ def place_index():
             'id': f"city-{city['geonameid']}", 'name': name, 'label': f'{name}, {country}',
             'country': country, 'kind': 'place'
         }))
-    return records
+    records.sort(key=lambda record: record[0])
+    return records, [record[0] for record in records]
+
+
+def suggest_destinations(query):
+    return _suggest_destinations(normalize(query))
 
 
 @lru_cache(maxsize=256)
-def suggest_destinations(query):
-    query = normalize(query)
+def _suggest_destinations(query):
     if not query:
         return []
-    matches = [record for record in place_index() if record[0].startswith(query)]
+    records, names = place_index()
+    start = bisect_left(names, query)
+    end = start
+    while end < len(names) and names[end].startswith(query):
+        end += 1
+    matches = records[start:end]
     rank = lambda record: (record[0] != query, -record[1], record[0], record[2]['id'])
     countries = nsmallest(3, (record for record in matches if record[2]['kind'] == 'country'), key=rank)
     places = nsmallest(10 - len(countries), (record for record in matches if record[2]['kind'] == 'place'), key=rank)

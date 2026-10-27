@@ -1,6 +1,6 @@
 // Service Worker for Travel With Us PWA
 // UPDATE THIS VERSION NUMBER TO FORCE CACHE CLEAR ON DEPLOYMENT
-const APP_VERSION = 'v3.0.1';
+const APP_VERSION = 'v3.0.2';
 const CACHE_NAME = `travel-with-us-${APP_VERSION}`;
 const STATIC_CACHE = `travel-static-${APP_VERSION}`;
 const DYNAMIC_CACHE = `travel-dynamic-${APP_VERSION}`;
@@ -37,7 +37,7 @@ self.addEventListener('activate', (event) => {
       caches.keys().then(cacheNames => {
         return Promise.all(
           cacheNames.map(cacheName => {
-            if (!cacheName.includes(APP_VERSION)) {
+            if (cacheName.startsWith('travel-') && !cacheName.includes(APP_VERSION)) {
               console.log(`[SW] Deleting old cache: ${cacheName}`);
               return caches.delete(cacheName);
             }
@@ -70,6 +70,14 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   // Cache-first strategy for static assets
+  if (request.mode === 'navigate') {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  // Never persist API responses, which may include private or user-specific data.
+  if (url.pathname.startsWith('/api/')) return;
+
   if (STATIC_ASSETS.includes(url.pathname) ||
       url.pathname.startsWith('/assets/') ||
       url.pathname.startsWith('/icons/') ||
@@ -109,7 +117,7 @@ async function cacheFirst(request) {
     return networkResponse;
   } catch (error) {
     // Return offline fallback if available
-    return caches.match('/offline.html') || new Response('Offline', { status: 503 });
+    return (await caches.match('/offline.html')) || new Response('Offline', { status: 503 });
   }
 }
 
@@ -123,7 +131,7 @@ async function networkFirst(request) {
     }
     return networkResponse;
   } catch (error) {
-    const cachedResponse = await caches.match(request);
+    const cachedResponse = await caches.match(request) || (request.mode === 'navigate' ? await caches.match('/') : undefined);
     return cachedResponse || new Response('Offline', { status: 503 });
   }
 }

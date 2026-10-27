@@ -1,7 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../Firebase';
+import { auth, onAuthStateChanged } from '../firebaseAuth';
 
 const ProfileContext = createContext(null);
 const styles = ['adventurer', 'adventurer-neutral', 'avataaars', 'big-ears', 'big-smile', 'bottts', 'croodles', 'fun-emoji', 'icons', 'lorelei', 'micah', 'miniavs', 'notionists', 'open-peeps', 'personas', 'pixel-art', 'thumbs'];
@@ -12,20 +10,25 @@ function fallbackAvatar(uid) {
 }
 
 export function ProfileProvider({ children }) {
-  const [identity, setIdentity] = useState(() => ({ user: auth.currentUser, profile: null }));
+  const [identity, setIdentity] = useState(() => ({ user: auth?.currentUser || null, profile: null }));
   useEffect(() => {
     let stopProfile;
     let activeUid;
+    let generation = 0;
     const stopAuth = onAuthStateChanged(auth, user => {
       stopProfile?.();
+      const currentGeneration = ++generation;
       activeUid = user?.uid;
       setIdentity(previous => ({ user, profile: previous.user?.uid === user?.uid ? previous.profile : null }));
       if (!user) return;
-      stopProfile = onSnapshot(doc(db, 'user_profiles', user.uid), snapshot => {
-        if (activeUid === user.uid) setIdentity({ user, profile: snapshot.exists() ? snapshot.data() : null });
-      }, error => console.error('Could not load navigation profile:', error));
+      import('../firebaseDatabase').then(({ subscribeToProfile }) => {
+        if (generation !== currentGeneration) return;
+        stopProfile = subscribeToProfile(user.uid, snapshot => {
+          if (activeUid === user.uid) setIdentity({ user, profile: snapshot.exists() ? snapshot.data() : null });
+        }, error => console.error('Could not load navigation profile:', error));
+      }).catch(error => console.error('Could not load profile module:', error));
     });
-    return () => { activeUid = undefined; stopAuth(); stopProfile?.(); };
+    return () => { generation++; activeUid = undefined; stopAuth(); stopProfile?.(); };
   }, []);
   const { user, profile } = identity;
   const value = {

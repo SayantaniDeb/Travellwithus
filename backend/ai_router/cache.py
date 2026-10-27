@@ -96,6 +96,11 @@ class SemanticCache:
             except (ValueError, TypeError):
                 pass
         
+        # Responses depend on the complete prompt and feature, not just guessed fields.
+        normalized["feature"] = params.get("_feature", "")
+        normalized["request"] = params.get("_request", "")
+        normalized["generation"] = params.get("_generation", {})
+
         # Create hash
         key_str = json.dumps(normalized, sort_keys=True)
         return hashlib.sha256(key_str.encode()).hexdigest()[:32]
@@ -159,10 +164,10 @@ class SemanticCache:
         if params is None:
             params = self._extract_params_from_messages(messages)
         
-        if not params:
-            return None
         
+        params = dict(params)
         params["_feature"] = feature_type
+        params["_request"] = hashlib.sha256(json.dumps(messages, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         key = self._normalize_key(params)
         
         with self._lock:
@@ -203,10 +208,10 @@ class SemanticCache:
         if params is None:
             params = self._extract_params_from_messages(messages)
         
-        if not params:
-            return
         
+        params = dict(params)
         params["_feature"] = feature_type
+        params["_request"] = hashlib.sha256(json.dumps(messages, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         key = self._normalize_key(params)
         
         with self._lock:
