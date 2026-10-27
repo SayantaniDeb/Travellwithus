@@ -34,3 +34,4 @@ __pycache__/
 
 # Rendered launch video artifacts
 /out/
+.vercel

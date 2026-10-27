@@ -1,3 +1,4 @@
+import { LoaderCircle } from 'lucide-react';
 import BackButton from './BackButton';
 import { consumePlannerReturn } from '../utils/authReturn';
 import ThemeToggle from './ThemeToggle';
@@ -53,6 +54,20 @@ const createUserProfile = async (user) => {
   }
 };
 
+async function prepareProfile(user) {
+  let timer;
+  try {
+    await Promise.race([
+      createUserProfile(user),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Profile setup timed out')), 8000); }),
+    ]);
+  } catch (error) {
+    console.warn('Profile setup will need to retry:', error.message);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function LoginForm() {
   const [value, setValue] = useState('')
   const [loading, setLoading] = useState(false)
@@ -79,7 +94,7 @@ function LoginForm() {
           localStorage.setItem("email", result.user.email)
           localStorage.setItem("displayName", result.user.displayName || result.user.email?.split('@')[0] || 'User')
           // Create user profile with random avatar if new user
-          await createUserProfile(result.user)
+          await prepareProfile(result.user)
           finishSignIn()
         }
       })
@@ -100,7 +115,7 @@ function LoginForm() {
           localStorage.setItem("email", data.user.email)
           localStorage.setItem("displayName", data.user.displayName || data.user.email?.split('@')[0] || 'User')
           // Create user profile with random avatar if new user
-          await createUserProfile(data.user)
+          await prepareProfile(data.user)
           finishSignIn()
         })
         .catch((error) => {
@@ -207,7 +222,7 @@ function LoginForm() {
         const result = await createUserWithEmailAndPassword(auth, email, password)
         
         // Create user profile with random avatar
-        await createUserProfile(result.user)
+        await prepareProfile(result.user)
         
         // Send email verification
         await sendEmailVerification(result.user)
@@ -252,7 +267,7 @@ function LoginForm() {
         localStorage.setItem("email", result.user.email)
         localStorage.setItem("displayName", result.user.displayName || result.user.email?.split('@')[0] || 'User')
         // Create user profile if doesn't exist (for existing users)
-        await createUserProfile(result.user)
+        await prepareProfile(result.user)
         finishSignIn()
       } catch (error) {
         console.error('Sign in error:', error)
@@ -454,7 +469,7 @@ function LoginForm() {
                 disabled={loading}
                 className="w-full py-3 sm:py-3.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-sm sm:text-base mt-2"
               >
-                {loading ? 'Processing...' : isSignUp ? 'Create Account' : 'Sign In'}
+                {loading ? <span role="status" className="inline-flex items-center gap-2"><LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin"/>Signing in…</span> : isSignUp ? 'Create Account' : 'Sign In'}
               </button>
             </form>
             
@@ -492,7 +507,7 @@ function LoginForm() {
                 onClick={handleClick}
                 disabled={loading}
               >
-                {loading ? 'Signing in...' : 'Sign in with Google'}
+                {loading ? <span role="status" className="inline-flex items-center gap-2"><LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin"/>Signing in…</span> : 'Sign in with Google'}
               </button>
 
             </div>

@@ -640,3 +640,14 @@ html.dark .trip-setup .trip-setup-header {
   background-color: #131f31 !important;
   border-color: #2b3e57 !important;
 }
+
+html.dark .signin-cancel { background-color: #1c2b40 !important; color: #e2e8f0 !important; border-color: #52657d !important; }
+html.dark .signin-cancel:hover { background-color: #293e58 !important; }
+
+.feature-section-nav .feature-nav-number-idle { background: transparent; color: #64748b; box-shadow: none; }
+.feature-section-nav .feature-nav-number-idle:hover { background: #eff6ff; color: #1d4ed8; }
+.feature-section-nav .feature-nav-number-active { background: #2563eb; color: #fff; }
+html.dark .feature-section-nav { background: #131f31; border-color: #334760; }
+html.dark .feature-section-nav .feature-nav-number-idle { color: #a8b9d0; }
+html.dark .feature-section-nav .feature-nav-number-idle:hover { background: #243b59; color: #dbeafe; }
+html.dark .feature-section-nav .feature-nav-number-active { background: #93c5fd; color: #0b1220; }

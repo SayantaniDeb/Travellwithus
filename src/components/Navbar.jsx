@@ -1,3 +1,4 @@
+import LoadingSpinner from './LoadingSpinner';
 import BackButton from './BackButton';
 import WeatherBadge from './WeatherBadge';
 import ThemeToggle from './ThemeToggle';
@@ -134,6 +135,7 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
   const { user, userPhoto, userName } = useProfileIdentity();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showSignInPopup, setShowSignInPopup] = useState(false);
+  const [openingSignIn, setOpeningSignIn] = useState(false);
   
   // PWA Install state
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -284,19 +286,21 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
             <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl p-6 max-w-xs w-full text-center">
               <h2 className="text-lg font-semibold mb-3 text-zinc-800">Sign In</h2>
               <p className="text-sm text-gray-600 mb-4">Access your travel plans and preferences</p>
+              {openingSignIn && <LoadingSpinner compact label="Opening sign in…"/>}
               <div className="flex gap-4 justify-center mt-4">
                 <button
                   onClick={() => {
-                    setShowSignInPopup(false);
+                    setOpeningSignIn(true);
                     navigate('/login');
                   }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow hover:bg-blue-700 transition-colors"
+                  disabled={openingSignIn}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow hover:bg-blue-700 transition-colors disabled:opacity-70"
                 >
-                  Sign In
+                  {openingSignIn ? 'Opening…' : 'Sign In'}
                 </button>
                 <button
                   onClick={() => setShowSignInPopup(false)}
-                  className="px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg font-medium shadow hover:bg-zinc-300 transition-colors"
+                  className="signin-cancel px-4 py-2 border border-slate-300 bg-white text-slate-700 rounded-lg font-medium hover:bg-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
