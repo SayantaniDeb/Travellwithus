@@ -651,3 +651,20 @@ html.dark .feature-section-nav { background: #131f31; border-color: #334760; }
 html.dark .feature-section-nav .feature-nav-number-idle { color: #a8b9d0; }
 html.dark .feature-section-nav .feature-nav-number-idle:hover { background: #243b59; color: #dbeafe; }
 html.dark .feature-section-nav .feature-nav-number-active { background: #93c5fd; color: #0b1220; }
+
+@media (max-width: 639px) {
+  .feature-section-nav {
+    right: 3px;
+    padding: 3px 1px;
+    gap: 1px;
+    border-radius: 999px;
+  }
+  .feature-section-nav .feature-nav-number {
+    width: 18px !important;
+    height: 32px !important;
+    min-width: 18px;
+    min-height: 32px;
+    border-radius: 999px !important;
+    font-size: 9px !important;
+  }
+}

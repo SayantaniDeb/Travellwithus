@@ -153,16 +153,10 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
                       window.navigator.standalone === true;
     setIsStandalone(standalone);
 
-    // Check if already dismissed install prompt recently (within 7 days)
-    const dismissedTime = localStorage.getItem('pwaInstallDismissed');
-    const showAgain = !dismissedTime || (Date.now() - parseInt(dismissedTime)) > 7 * 24 * 60 * 60 * 1000;
-
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      if (showAgain) {
-        setCanInstall(true);
-      }
+      setCanInstall(true);
     };
 
     const handleAppInstalled = () => {
@@ -176,10 +170,10 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
       window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       // For browsers that support PWA but event hasn't fired yet, 
       // show button if not standalone and not recently dismissed
-      if (!standalone && showAgain) {
+      if (!standalone) {
         setCanInstall(true);
       }
-    } else if (!standalone && showAgain) {
+    } else if (!standalone) {
       setCanInstall(true); // Show install option for iOS too
     }
 
@@ -260,7 +254,8 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
                   <button
                     onClick={handleInstallClick}
                     className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
-                    title="Install App"
+                    aria-label="Install app"
+                  title="Install App"
                   >
                     <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Install</span>
@@ -389,6 +384,7 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
                 <button
                   onClick={handleInstallClick}
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                  aria-label="Install app"
                   title="Install App"
                 >
                   <ArrowDownTrayIcon className="w-3.5 h-3.5" />
@@ -433,7 +429,8 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
               {canInstall && !isStandalone && (
                 <button
                   onClick={handleInstallClick}
-                  className="hidden sm:flex items-center gap-1 px-2 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center gap-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-full hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm"
+                  aria-label="Install app"
                   title="Install App"
                 >
                   <ArrowDownTrayIcon className="w-3.5 h-3.5" />

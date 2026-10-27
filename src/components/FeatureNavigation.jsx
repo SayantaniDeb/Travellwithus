@@ -24,6 +24,10 @@ export default function FeatureNavigation({ features }) {
         const next = Math.abs(rect.top + rect.height / 2 - focus);
         if (next < distance) { distance = next; closest = index; }
       });
+      // The last section cannot reach the viewport focus line at the page end.
+      if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 8) {
+        closest = features.length - 1;
+      }
       setActive(closest);
     };
     const schedule = () => { if (!frame.current) frame.current = requestAnimationFrame(update); };
