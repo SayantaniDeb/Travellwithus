@@ -514,3 +514,29 @@ html.dark .trip-date-control:focus-within {
 .hero-night-moon { display: none; }
 html.dark .hero-day-sun { display: none; }
 html.dark .hero-night-moon { display: inline; }
+
+/* Keep the planning form crisp against the illustrated night sky. */
+html.dark .welcome-hero .welcome-planning-section h2 {
+  color: #f8fbff !important;
+  text-shadow: 0 2px 20px rgb(5 15 35 / 45%);
+}
+html.dark .welcome-hero .welcome-planning-section p.text-gray-600 { color: #dbeafe !important; }
+html.dark .welcome-hero #destination-search > p { color: #c2d6f3 !important; }
+html.dark .welcome-hero #destination-search input {
+  background-color: #101e35 !important;
+  border-color: #6686b1 !important;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 30%), 0 0 24px rgb(96 165 250 / 12%);
+}
+html.dark .welcome-hero #destination-search input::placeholder { color: #c0cfe4; }
+
+/* Keep the fixed pale Lottie sky dark behind the planning form. */
+html.dark .legacy-car-hero .hero-car-animation { filter: saturate(1.25); }
+html.dark .hero-sky-shade {
+  background: linear-gradient(to bottom,
+    rgb(8 18 38 / 96%) 0%,
+    rgb(12 25 51 / 94%) 30%,
+    rgb(18 35 65 / 90%) 48%,
+    rgb(21 40 72 / 65%) 62%,
+    rgb(16 31 58 / 12%) 82%,
+    transparent 100%);
+}
