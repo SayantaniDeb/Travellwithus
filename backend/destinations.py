@@ -13,7 +13,7 @@ def normalize(value):
 
 @lru_cache(maxsize=1)
 def place_index():
-    cache = geonamescache.GeonamesCache(min_city_population=1000)
+    cache = geonamescache.GeonamesCache(min_city_population=15000)
     countries = cache.get_countries()
     records = []
     for code, country in countries.items():

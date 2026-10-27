@@ -31,7 +31,7 @@ class SemanticCache:
     Supports TTL and automatic cleanup.
     """
     
-    def __init__(self, max_size: int = 1000, default_ttl: int = 86400):
+    def __init__(self, max_size: int = 128, default_ttl: int = 86400):
         self._cache: Dict[str, CacheEntry] = {}
         self._lock = Lock()
         self._max_size = max_size
@@ -214,6 +214,10 @@ class SemanticCache:
         params["_request"] = hashlib.sha256(json.dumps(messages, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         key = self._normalize_key(params)
         
+        # Avoid retaining unusually large model responses in process memory.
+        if len(json.dumps(response, ensure_ascii=False).encode("utf-8")) > 128 * 1024:
+            return
+
         with self._lock:
             # Evict if at capacity (LRU-ish: remove oldest expired first)
             if len(self._cache) >= self._max_size:
