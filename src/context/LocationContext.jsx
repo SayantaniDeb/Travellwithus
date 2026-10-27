@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { cleanLocationName } from '../utils/locationName';
 
 const LocationContext = createContext();
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -27,7 +28,8 @@ export const LocationProvider = ({ children }) => {
 
     if (storedLocation) {
       setLocation(JSON.parse(storedLocation));
-      setLocationName(storedLocationName || '');
+      setLocationName(cleanLocationName(storedLocationName));
+      if (!cleanLocationName(storedLocationName)) localStorage.removeItem('userLocationName');
     }
 
     if (permissionWasAsked) {
@@ -50,6 +52,7 @@ export const LocationProvider = ({ children }) => {
       const response = await fetch(
         `${API_URL}/api/geocode?lat=${lat}&lng=${lng}`
       );
+      if (!response.ok) throw new Error('Location lookup failed');
       const data = await response.json();
       if (data.features && data.features.length > 0) {
         // Get city or locality name
@@ -57,12 +60,14 @@ export const LocationProvider = ({ children }) => {
           f.place_type.includes('place') || 
           f.place_type.includes('locality')
         ) || data.features[0];
-        return place.text || place.place_name?.split(',')[0] || 'Unknown';
+        if (!cleanLocationName(place.text)) return '';
+        // Preserve the actual location context instead of just its short name.
+        return cleanLocationName(place.place_name || [place.text, ...(place.context || []).filter(item => /^(place|region|country)\./.test(item.id)).map(item => item.text)].filter(Boolean).join(', '));
       }
-      return 'Unknown Location';
+      return '';
     } catch (err) {
       console.error('Error getting location name:', err);
-      return 'Unknown Location';
+      return '';
     }
   };
 
@@ -99,7 +104,11 @@ export const LocationProvider = ({ children }) => {
       // Get location name
       const name = await getLocationName(newLocation.latitude, newLocation.longitude);
       setLocationName(name);
-      localStorage.setItem('userLocationName', name);
+      if (name) localStorage.setItem('userLocationName', name);
+      else {
+        localStorage.removeItem('userLocationName');
+        setError('Could not identify your city. Please enter your starting city manually.');
+      }
       return name;
 
     } catch (err) {

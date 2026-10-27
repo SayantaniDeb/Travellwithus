@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Navbar from './Navbar';
+import { Input, Label, NativeSelect, Button } from './ui/form-controls';
 import { db, auth, storage } from '../Firebase';
 import { onAuthStateChanged } from '../Firebase';
 import { 
@@ -367,14 +368,14 @@ function Profile() {
         <div className="max-w-2xl mx-auto">
 
           {/* Profile Header Card */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl overflow-hidden mb-6">
+          <div className="profile-card bg-white rounded-3xl border border-zinc-200/60 shadow-xl overflow-hidden mb-6">
             {/* Cover gradient */}
-            <div className="h-24 sm:h-32 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+            <div aria-hidden="true" className="profile-cover h-24 sm:h-28 relative overflow-hidden"><div className="absolute -right-8 -top-20 h-56 w-56 rounded-full border border-white/20"/><div className="absolute right-12 -top-14 h-44 w-44 rounded-full border border-white/15"/></div>
             
             {/* Profile section */}
-            <div className="px-4 sm:px-6 pb-6">
+            <div className="px-5 sm:px-8 pb-7">
               {/* Avatar */}
-              <div className="flex flex-col items-center -mt-12 relative">
+              <div className="relative mx-auto -mt-11 mb-4 h-24 w-24">
                 {profile.photoURL ? (
                   <img
                     src={profile.photoURL}
@@ -397,8 +398,8 @@ function Profile() {
                 {isOwnProfile && (
                   <button
                     onClick={() => setShowAvatarPicker(true)}
-                    className="absolute -bottom-1 right-1/2 translate-x-8 w-8 h-8 bg-white border border-zinc-200 rounded-full shadow-md flex items-center justify-center hover:bg-zinc-50 transition-colors"
-                    title="Change avatar"
+                    className="absolute -bottom-1 -right-1 w-8 h-8 bg-white border border-zinc-200 rounded-full shadow-md flex items-center justify-center hover:bg-zinc-50 transition-colors"
+                    title="Change avatar" aria-label="Change profile avatar"
                   >
                     <svg className="w-4 h-4 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -409,8 +410,8 @@ function Profile() {
               </div>
 
               {/* Name and email */}
-              <div className="mb-4">
-                <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">
+              <div className="mb-3 text-center">
+                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-900">
                   {profile.displayName || 'Traveler'}
                 </h1>
                 
@@ -418,11 +419,11 @@ function Profile() {
 
               {/* Bio */}
               {profile.bio && (
-                <p className="text-zinc-600 text-sm mb-4">{profile.bio}</p>
+                <p className="mx-auto max-w-md text-center text-zinc-600 text-sm leading-relaxed mb-4">{profile.bio}</p>
               )}
 
               {/* Quick stats */}
-              <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
                 {profile.location && (
                   <div className="flex items-center gap-1 text-zinc-500">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -458,82 +459,31 @@ function Profile() {
               {isOwnProfile && !editing && (
                 <button
                   onClick={startEditing}
-                  className="mt-4 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-sm font-medium transition-colors"
+                  className="mx-auto mt-5 flex items-center rounded-xl border border-zinc-200 bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-200"
                 >
                   Edit Profile
                 </button>
               )}
               {isOwnProfile && editing && (
-                <div className="mt-4 space-y-2">
-                  <input
-                    type="text"
-                    value={editForm.displayName}
-                    onChange={e => setEditForm(f => ({ ...f, displayName: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded"
-                    placeholder="Display Name"
-                  />
-                  <textarea
-                    value={editForm.bio}
-                    onChange={e => setEditForm(f => ({ ...f, bio: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded"
-                    placeholder="Bio"
-                  />
-                  <input
-                    type="text"
-                    value={editForm.location}
-                    onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded"
-                    placeholder="Location"
-                  />
-                  <input
-                    type="text"
-                    value={editForm.website}
-                    onChange={e => setEditForm(f => ({ ...f, website: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded"
-                    placeholder="Website"
-                  />
-                  {/* Travel stats editing */}
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs text-zinc-500 mb-1">Countries Visited</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={editForm.countriesVisited}
-                        onChange={e => setEditForm(f => ({ ...f, countriesVisited: Number(e.target.value) }))}
-                        className="w-full px-3 py-2 border rounded"
-                        placeholder="Countries Visited"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-xs text-zinc-500 mb-1">Travel Style</label>
-                      <select
-                        value={editForm.travelStyle}
-                        onChange={e => setEditForm(f => ({ ...f, travelStyle: e.target.value }))}
-                        className="w-full px-3 py-2 border rounded"
-                      >
-                        <option value="">Select Style</option>
-                        {travelStyles.map(style => (
-                          <option key={style.id} value={style.id}>{style.emoji} {style.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                <form onSubmit={event => { event.preventDefault(); saveProfile(); }} className="mt-7 border-t border-slate-200 pt-6">
+                  <div className="mb-5"><h2 className="text-base font-semibold text-slate-900">About you</h2><p className="mt-1 text-sm text-slate-500">A little introduction for fellow travelers.</p></div>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div className="space-y-2 sm:col-span-2"><Label htmlFor="profile-name">Display name</Label><Input id="profile-name" value={editForm.displayName || ''} onChange={e => setEditForm(f => ({...f, displayName:e.target.value}))} placeholder="Your name" required maxLength={100} /></div>
+                    <div className="space-y-2 sm:col-span-2"><Label htmlFor="profile-bio">Bio <span className="font-normal text-slate-400">· optional</span></Label><textarea id="profile-bio" value={editForm.bio || ''} onChange={e => setEditForm(f => ({...f, bio:e.target.value}))} rows={3} maxLength={500} className="block w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="The places, food, or adventures you travel for…" /></div>
+                    <div className="space-y-2"><Label htmlFor="profile-location">Based in</Label><Input id="profile-location" value={editForm.location || ''} onChange={e => setEditForm(f => ({...f, location:e.target.value}))} placeholder="City, country" /></div>
+                    <div className="space-y-2"><Label htmlFor="profile-website">Website</Label><Input id="profile-website" value={editForm.website || ''} onChange={e => setEditForm(f => ({...f, website:e.target.value}))} placeholder="yourwebsite.com" /></div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Favorite Destination</label>
-                    <input
-                      type="text"
-                      value={editForm.favoriteDestination}
-                      onChange={e => setEditForm(f => ({ ...f, favoriteDestination: e.target.value }))}
-                      className="w-full px-3 py-2 border rounded"
-                      placeholder="Favorite Destination"
-                    />
+                  <div className="mb-5 mt-7 border-t border-slate-200 pt-6"><h2 className="text-base font-semibold text-slate-900">Your travel personality</h2><p className="mt-1 text-sm text-slate-500">Where you’ve been and what you love.</p></div>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div className="space-y-2"><Label htmlFor="profile-countries">Countries visited</Label><Input id="profile-countries" type="number" min="0" step="1" value={editForm.countriesVisited ?? 0} onChange={e => setEditForm(f => ({...f, countriesVisited:Number(e.target.value)}))} /></div>
+                    <div className="space-y-2"><Label htmlFor="profile-style">Travel style</Label><NativeSelect id="profile-style" value={editForm.travelStyle || ''} onChange={e => setEditForm(f => ({...f, travelStyle:e.target.value}))}><option value="">Choose your style</option>{travelStyles.map(style => <option key={style.id} value={style.id}>{style.emoji} {style.label}</option>)}</NativeSelect></div>
+                    <div className="space-y-2 sm:col-span-2"><Label htmlFor="profile-favorite">Favorite destination</Label><Input id="profile-favorite" value={editForm.favoriteDestination || ''} onChange={e => setEditForm(f => ({...f, favoriteDestination:e.target.value}))} placeholder="Somewhere you’d return to" /></div>
                   </div>
-                  <div className="flex gap-2 mt-2">
-                    <button onClick={saveProfile} className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
-                    <button onClick={cancelEditing} className="px-4 py-2 bg-zinc-200 text-zinc-700 rounded">Cancel</button>
+                  <div className="mt-7 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-5">
+                    <button type="button" onClick={cancelEditing} className="h-11 rounded-xl border border-slate-200 px-5 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+                    <Button type="submit" className="rounded-xl px-6">Save changes</Button>
                   </div>
-                </div>
+                </form>
               )}
             </div>
           </div>

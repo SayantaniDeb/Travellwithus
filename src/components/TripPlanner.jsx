@@ -1,4 +1,5 @@
 import LoadingSpinner from './LoadingSpinner';
+import { cleanLocationName } from '../utils/locationName';
 import { parseEstimatedCost } from '../utils/tripBudget';
 import { itineraryDayLabel } from '../utils/dayLabels';
 import { canResumeTrip } from '../utils/tripNavigation';
@@ -16,11 +17,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation as useRouterLocation } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
 import { auth, db } from '../Firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from '../Firebase';
 import Navbar from './Navbar';
 import TripSetupForm from './TripSetupForm';
-import TripCostOverview from './TripCostOverview';
+import BudgetTrackerPreview from './BudgetTrackerPreview';
 import TripHeader from './TripHeader';
 import { reserveTravelDays, refreshOnboardDay, attachTravelDirections } from '../utils/travelSchedule';
 import DestinationAutocomplete from './DestinationAutocomplete';
@@ -134,7 +135,7 @@ export default function TripPlanner() {
         setSelectedDay(usable ? parsed.selectedDay || null : null);
         setStartDate(parsed.startDate || localDate());
         setEndDate(parsed.endDate || addDays(parsed.startDate || localDate(),3));
-        setSourceLocation(parsed.sourceLocation || '');
+        setSourceLocation(cleanLocationName(parsed.sourceLocation));
         setBudgetAmount(parsed.budgetAmount ?? '10000');
         setCurrency(parsed.currency || 'INR');
         setIncludeHotels(parsed.includeHotels !== false);
@@ -171,12 +172,12 @@ export default function TripPlanner() {
 
   // Set currency and source location based on user's location
   useEffect(() => {
-    if (locationName) {
+    if (cleanLocationName(locationName)) {
       const detectedCurrency = getCurrencyFromLocation(locationName);
       setCurrency(detectedCurrency);
       // Set source location as default if not already set
       if (!sourceLocation) {
-        setSourceLocation(locationName);
+        setSourceLocation(cleanLocationName(locationName));
       }
     }
   }, [locationName]);
@@ -193,6 +194,15 @@ export default function TripPlanner() {
   const generatePlan = async (options = {}) => {
     const refreshing = options.refresh === true;
     if (loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel) return;
+
+    if (!cleanLocationName(destination)) {
+      setError('Enter a real destination, including its city and country.');
+      return;
+    }
+    if ((includeTravel || sourceLocation.trim()) && !cleanLocationName(sourceLocation)) {
+      setError('Enter a real starting city and country before generating travel directions.');
+      return;
+    }
 
     // --- STRICT VALIDATIONS ---
     // 1. Budget validation: must be pure numeric (no alpha/alphanumeric)
@@ -617,14 +627,21 @@ Offer different real activities with morning, afternoon and evening objects. Eac
     setSaving(true);
     try {
       const tripRef = collection(db, 'users', user.uid, 'trips');
-      const docRef = await addDoc(tripRef, {
-        ...plan,
+      const docRef = doc(tripRef);
+      const batch = writeBatch(db);
+      const { draftExpenses = [], ...savedPlan } = plan;
+      batch.set(docRef, {
+        ...savedPlan,
         source: sourceLocation,
         currency,
         budgetAmount: budgetAmount ? parseFloat(budgetAmount) : 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      for (const { id, ...expense } of draftExpenses) {
+        batch.set(doc(collection(docRef, 'expenses')), {...expense, createdAt: serverTimestamp()});
+      }
+      await batch.commit();
       setTripSaved(true); // Mark trip as saved
       // Clear cache and redirect to saved trips
       sessionStorage.removeItem(cacheKey);
@@ -758,7 +775,7 @@ Offer different real activities with morning, afternoon and evening objects. Eac
             <PlanBudgetWarning plan={plan} budget={budgetAmount} symbol={CURRENCIES[currency]?.symbol || '₹'} />
             {!plan.travelInfo && journeyEditorOpen && (<JourneyDirections plan={plan} source={sourceLocation} onSourceChange={setSourceLocation} onGenerate={refreshTravel}
               disabled={loading || refreshingDay !== null || refreshingPeriod !== null} busy={refreshingTravel} message={travelMessage} />)}
-            <TripCostOverview plan={{ ...plan, includeTravel }} budget={budgetAmount} symbol={CURRENCIES[currency]?.symbol || '₹'} />
+            <div className="mb-7"><BudgetTrackerPreview trip={{ ...plan, includeTravel, currency, budgetAmount, startDate, endDate }} userId={user?.uid} symbol={CURRENCIES[currency]?.symbol || '₹'} onDraftChange={patch => { setPlan(current => ({ ...current, ...patch })); setTripSaved(false); }} /></div>
 
             {plan.travelInfo && <JourneyTickets onSaveCost={saveJourneyCost} plan={plan} source={sourceLocation} onSourceChange={setSourceLocation} onGenerate={refreshTravel} busy={refreshingTravel} disabled={loading || refreshingDay !== null || refreshingPeriod !== null} message={travelMessage} />}
 

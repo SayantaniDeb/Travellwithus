@@ -540,3 +540,8 @@ html.dark .hero-sky-shade {
     rgb(16 31 58 / 12%) 82%,
     transparent 100%);
 }
+
+/* Profile identity banner: decorative color independent of utility overrides. */
+.profile-cover { background: linear-gradient(115deg, #2563eb, #4f46e5 55%, #7c3aed); }
+html.dark .profile-cover { background: radial-gradient(ellipse at 15% 20%, #245c91, transparent 65%), linear-gradient(115deg, #173454, #30265d); }
+.profile-card :is(input, select) { border-radius: 0.75rem; }
