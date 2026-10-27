@@ -1,3 +1,4 @@
+import { API_BASE } from '../utils/apiBase';
 import { safeExternalUrl } from '../utils/safeUrl';
 import BackButton from './BackButton';
 import { plannerReturnPath } from '../utils/tripNavigation';
@@ -598,7 +599,7 @@ const getSuggestedBudget = (location, currency) => {
 };
 
 const LLM_PROVIDER = 'groq'; // 'groq' or 'openai'
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = API_BASE;
 
 // Helper function to call AI via backend proxy
 const callAI = async (model, prompt, maxTokens = 8000) => {

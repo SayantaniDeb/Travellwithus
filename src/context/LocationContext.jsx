@@ -1,8 +1,9 @@
+import { API_BASE } from '../utils/apiBase';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { cleanLocationName } from '../utils/locationName';
 
 const LocationContext = createContext();
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = API_BASE;
 
 export const useLocation = () => {
   const context = useContext(LocationContext);

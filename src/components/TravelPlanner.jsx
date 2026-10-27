@@ -1,8 +1,9 @@
+import { API_BASE } from '../utils/apiBase';
 import React, { useState } from 'react';
 import { useLocation } from '../context/LocationContext';
 
 const LLM_PROVIDER = 'groq'; // 'groq' or 'openai'
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = API_BASE;
 
 export default function TravelPlanner({ destination, onClose }) {
   const [step, setStep] = useState('dates'); // 'dates', 'loading', 'calendar', 'dayDetail'

@@ -1,3 +1,4 @@
+import { API_BASE } from '../utils/apiBase';
 import { useEffect, useId, useRef, useState } from 'react';
 
 export default function DestinationAutocomplete({ value, onChange, id, placesOnly = false, preferredCountry = '', ...inputProps }) {
@@ -23,7 +24,7 @@ export default function DestinationAutocomplete({ value, onChange, id, placesOnl
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const base = import.meta.env.VITE_API_URL || '';
+        const base = API_BASE;
         const response = await fetch(`${base}/api/destinations?q=${encodeURIComponent(query)}`, { signal: controller.signal });
         if (!response.ok) throw new Error('Suggestions unavailable');
         const data = await response.json();

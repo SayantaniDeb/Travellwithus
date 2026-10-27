@@ -1,7 +1,8 @@
+import { API_BASE } from '../utils/apiBase';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useLocation } from './LocationContext';
 const WeatherContext=createContext(null);
-const API_URL=import.meta.env.VITE_API_URL||'';
+const API_URL=API_BASE;
 const KEY='travelwithus-weather-city';
 const FRESH_FOR = 30 * 60 * 1000;
 const weatherCache = new Map();

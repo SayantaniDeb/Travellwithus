@@ -1,3 +1,4 @@
+import { API_BASE } from '../utils/apiBase';
 import axios from "axios";
 import { useState, useEffect } from "react";
 import CityComponent from "./modules/CityComponent";
@@ -7,7 +8,7 @@ import Navbar from "./Navbar";
 import { useLocation } from "../context/LocationContext";
 
 // API URL from environment variable
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = API_BASE;
 
 export const WeatherIcons = {
   "01d": "/icons/sunny.svg",

@@ -1,3 +1,4 @@
+import { API_BASE } from '../utils/apiBase';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
@@ -20,7 +21,7 @@ import {
   serverTimestamp,
   getDoc
 } from 'firebase/firestore';
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = API_BASE;
 const PHOTO_LIMIT = 5 * 1024 * 1024;
 
 function Community() {

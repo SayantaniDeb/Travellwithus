@@ -1,3 +1,4 @@
+import { API_BASE } from '../utils/apiBase';
 import LazyCard from './LazyCard';
 import LoadingSpinner from './LoadingSpinner';
 import { itineraryDayLabel } from '../utils/dayLabels';
@@ -32,7 +33,7 @@ import { tripBudgetSummary, budgetOnlyPatch, parseEstimatedCost } from '../utils
 
 // LLM provider configuration
 const LLM_PROVIDER = import.meta.env.VITE_LLM_PROVIDER || 'groq';
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = API_BASE;
 
 // Helper function to call AI via backend proxy
 const callAI = async (model, prompt, maxTokens = 8000) => {
