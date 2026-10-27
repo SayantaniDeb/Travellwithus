@@ -545,3 +545,84 @@ html.dark .hero-sky-shade {
 .profile-cover { background: linear-gradient(115deg, #2563eb, #4f46e5 55%, #7c3aed); }
 html.dark .profile-cover { background: radial-gradient(ellipse at 15% 20%, #245c91, transparent 65%), linear-gradient(115deg, #173454, #30265d); }
 .profile-card :is(input, select) { border-radius: 0.75rem; }
+
+
+
+@media (max-width: 639px) {
+  /* Loaded day cards should follow their content on narrow screens. */
+  .lazy-itinerary-card[aria-busy="false"] { min-height: 0; }
+  .lazy-itinerary-card[aria-busy="false"] > :first-child { height: auto; }
+  .itinerary-preview-card .travel-card-cost { margin-top: .5rem; margin-bottom: .5rem; padding-top: .5rem; }
+  .itinerary-preview-card .day-card-cost { margin-top: .5rem; padding-top: .5rem; }
+}
+
+@media (max-width: 639px) {
+  .budget-add-form label { font-size: .75rem; }
+  .budget-add-form :is(input, select) { border-radius: .5rem; height: 2.5rem; min-height: 2.5rem; font-size: .875rem; padding-left: .5rem; }
+  .budget-add-form input[type="date"] { max-width: 100%; min-width: 0; }
+  .budget-add-form > div:last-child > p:empty { display: none; }
+}
+
+@media (max-width: 639px) {
+  .journey-tickets .journey-fare-actions :is(a, button) { display: inline-flex; align-items: center; min-height: 32px; }
+  .journey-tickets .journey-fare-editor > p { font-size: 11px; }
+}
+
+/* Compact setup layout; all controls stay in the normal page flow. */
+.trip-setup-page { min-height: 100vh; min-height: 100dvh; }
+.trip-setup-viewport { padding-top: 72px; padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+.trip-setup-footer > p { margin-top: .375rem; }
+@media (min-width: 640px) { .trip-setup-viewport { padding-top: 80px; } }
+@media (min-width: 1024px) { .trip-setup-viewport { padding-bottom: 16px; } }
+@media (max-height: 850px), (max-width: 639px) {
+  .trip-setup-content > header { padding: 12px 16px; }
+  .trip-setup-content > header h1 { font-size: 1.25rem; line-height: 1.3; }
+  .trip-setup-content > header > p { margin: 0 0 .375rem; font-size: .7rem; }
+  .trip-setup-content > header > h1 + p { margin-top: .25rem; }
+  .trip-setup-content > header > div { margin-top: .5rem; gap: .5rem; }
+  .trip-setup-content > header > div > :is(div, section) > div:first-child { min-height: 24px; margin-bottom: 4px; }
+  .trip-setup-content > header button { min-height: 28px; }
+  .trip-setup-content > header label { font-size: .75rem; }
+  .trip-setup-content > header input { padding: .5rem .75rem; height: 38px; font-size: .875rem; }
+  .trip-setup-content > div { padding: 10px 16px; }
+  .trip-setup-content > div > :not(:first-child) { margin-top: .5rem; }
+  .trip-setup-content section > div:first-child { margin-bottom: .25rem; }
+  .trip-setup-content .trip-date-control { padding: .375rem .5rem; }
+  .trip-setup-content .trip-date-control > span:first-child { font-size: 10px; }
+  .trip-setup-content .trip-date-control > span:nth-child(2) { margin-top: 2px; font-size: .75rem; }
+  .trip-setup-content section[aria-labelledby="dates-heading"] > div:nth-child(2) { margin-bottom: 0; }
+  .trip-setup-content :is(section, fieldset).border-t { padding-top: .5rem; }
+  .trip-setup-content h2 { font-size: .75rem; }
+  .trip-setup-content select { padding-top: .375rem; padding-bottom: .375rem; }
+  .trip-setup-content input.trip-budget-amount { font-size: 1.75rem !important; }
+  .trip-setup-content .trip-setup-slider { height: 24px; }
+  .trip-setup-content fieldset > p { margin-bottom: .375rem; }
+  .trip-setup-content fieldset > div { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .trip-setup-content fieldset label { padding: .5rem; gap: .5rem; }
+  .trip-setup-content fieldset label span span:first-child { font-size: .75rem; }
+  .trip-setup-content fieldset label span span:last-child { font-size: .625rem; }
+  .trip-setup-footer { padding: 10px 16px; }
+  .trip-setup-footer > p { font-size: 10px; margin-top: 4px; }
+}
+
+/* Keep mobile form text at Safari's no-focus-zoom size without disabling pinch zoom. */
+@media (max-width: 1023px) {
+  html body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+    font-size: 16px !important;
+  }
+  html body .trip-setup input.trip-budget-amount { font-size: 1.75rem !important; }
+}
+
+@media (max-width: 1023px) {
+  .stays-search-page { padding-top: 72px; }
+  .stays-search-card :is(input, select), .stays-trip-select select { height: 40px; min-width: 0; max-width: 100%; border-radius: .75rem; padding: .375rem .625rem; }
+  .stays-trip-select select { margin-top: .375rem; }
+  .stays-search-card .grid > div { min-width: 0; }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .stays-search-page { padding-top: 80px; }
+  .stays-trip-select { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
+  .stays-trip-select select { margin-top: 0; }
+}
+
+.community-poll-editor input { border-radius: .75rem !important; border-color: #cbd5e1; }

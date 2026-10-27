@@ -934,12 +934,12 @@ Return ONLY valid JSON:
   return (
     <div className="min-h-screen trip-page-background stays-background">
       <Navbar onBack={returnToItinerary} backLabel={linkedTrip ? 'Back to itinerary' : 'Back to Explore'} />
-      <div className="pt-20 sm:pt-24 pb-24 px-4">
+      <div className="stays-search-page pt-20 sm:pt-24 pb-24 px-4">
         <div className="max-w-2xl mx-auto">
-          <div className="mb-4 flex items-center justify-between gap-3"><h1 className="text-2xl font-bold">Stays</h1><button type="button" aria-expanded={showSaved} onClick={() => setShowSaved(value => !value)} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium"><span aria-hidden="true">{showSaved?'‹':<HeartOutlineIcon className="h-5 w-5" />}</span>{showSaved ? 'Back to hotel search' : 'Saved hotels'}</button></div>
+          <div className="mb-3 flex items-center justify-between gap-3"><h1 className="text-xl lg:text-2xl font-bold">Stays</h1><button type="button" aria-expanded={showSaved} onClick={() => setShowSaved(value => !value)} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs lg:text-sm font-medium"><span aria-hidden="true">{showSaved?'‹':<HeartOutlineIcon className="h-5 w-5" />}</span>{showSaved ? 'Back to hotel search' : 'Saved hotels'}</button></div>
           {showSaved && <Shortlist embedded trip={linkedTrip} tripId={linkedTrip?.id} onBrowse={() => setShowSaved(false)} onRemoved={id => setShortlistedHotels(prev => { const next = new Set(prev); next.delete(id); return next; })} />}
           <div hidden={showSaved}>
-          <label className="mb-4 block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium">Save hotels for trip<select value={linkedTrip?.id || ''} onChange={event => { const target = availableTrips.find(item => item.id === event.target.value); if (target) navigate('/hotels', { state: { tripData: target } }); else { setLinkedTrip(null); sessionStorage.removeItem('staysTripContext'); } }} className="mt-2 block w-full rounded-lg border border-slate-300 bg-white p-3"><option value="">Separate search · assign favorites later</option>{availableTrips.map(item => <option key={item.id} value={item.id}>{item.actualDestination || item.destination} · {item.startDate || ''} – {item.endDate || ''}</option>)}</select></label>
+          <label className="stays-trip-select mb-3 block rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium lg:p-4 lg:text-sm">Save hotels for trip<select value={linkedTrip?.id || ''} onChange={event => { const target = availableTrips.find(item => item.id === event.target.value); if (target) navigate('/hotels', { state: { tripData: target } }); else { setLinkedTrip(null); sessionStorage.removeItem('staysTripContext'); } }} className="mt-2 block w-full rounded-lg border border-slate-300 bg-white p-3"><option value="">Separate search · assign favorites later</option>{availableTrips.map(item => <option key={item.id} value={item.id}>{item.actualDestination || item.destination} · {item.startDate || ''} – {item.endDate || ''}</option>)}</select></label>
           {linkedTrip && <section className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-blue-900">Stays for {linkedTrip.actualDestination || linkedTrip.destination}</h2><button type="button" className="text-xs font-medium text-blue-700 underline" onClick={() => { setLinkedTrip(null); sessionStorage.removeItem('staysTripContext'); setLocation(''); setCheckIn(''); setCheckOut(''); setBudget(''); }}>Start a separate search</button></div>
             {!linkedTrip.id && <p className="mt-2 text-xs text-amber-800">Save your itinerary first to group hotel favorites under that trip. Until then, favorites go into Other saved hotels.</p>}
@@ -950,8 +950,8 @@ Return ONLY valid JSON:
             <BackButton className="mt-3" onClick={returnToItinerary}>Back to this itinerary</BackButton>
           </section>}
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl p-6 mb-6">
-            <h1 className="text-2xl font-bold text-zinc-900 mb-6">Find stays</h1>
+          <div className="stays-search-card bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl p-4 lg:p-6 mb-6">
+            <h2 className="text-lg lg:text-2xl font-semibold text-zinc-900 mb-3 lg:mb-6">Find stays</h2>
 
             {error && (
               <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm mb-4">
@@ -959,9 +959,9 @@ Return ONLY valid JSON:
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-3 lg:space-y-4">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Location</label>
+                <label className="block text-xs lg:text-sm font-medium text-zinc-700 mb-1">Location</label>
                 <div className="relative"><DestinationAutocomplete
                   type="text"
                   value={location}
@@ -971,9 +971,9 @@ Return ONLY valid JSON:
                 /></div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Check-in</label>
+                  <label className="block text-xs lg:text-sm font-medium text-zinc-700 mb-1">Check-in</label>
                   <input
                     type="date"
                     value={checkIn}
@@ -982,7 +982,7 @@ Return ONLY valid JSON:
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Check-out</label>
+                  <label className="block text-xs lg:text-sm font-medium text-zinc-700 mb-1">Check-out</label>
                   <input
                     type="date"
                     value={checkOut}
@@ -992,9 +992,9 @@ Return ONLY valid JSON:
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Max Budget per Night</label>
+                  <label className="block text-xs lg:text-sm font-medium text-zinc-700 mb-1">Budget / night</label>
                   <input
                     type="number"
                     value={budget}
@@ -1004,7 +1004,7 @@ Return ONLY valid JSON:
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Currency</label>
+                  <label className="block text-xs lg:text-sm font-medium text-zinc-700 mb-1">Currency</label>
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
@@ -1012,7 +1012,7 @@ Return ONLY valid JSON:
                   >
                     {Object.entries(currencies).map(([code, data]) => (
                       <option key={code} value={code}>
-                        {data.symbol} {code} - {data.name}
+                        {data.symbol} {code}
                       </option>
                     ))}
                   </select>

@@ -968,34 +968,34 @@ Return ONLY valid JSON (keep same structure as original):
               <div
                 key={day.day}
                 onClick={() => setSelectedDay(day)}
-                className={`backdrop-blur-sm border rounded-2xl p-4 cursor-pointer hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 ${day.travelReservation?'bg-yellow-50 border-yellow-300 shadow-md shadow-yellow-100/60':'bg-white/80 border-zinc-200/60 hover:border-zinc-300 hover:shadow-zinc-200/50'}`}
+                className={`itinerary-preview-card backdrop-blur-sm border rounded-2xl p-3 sm:p-4 cursor-pointer hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 ${day.travelReservation?'bg-yellow-50 border-yellow-300 shadow-md shadow-yellow-100/60':'bg-white/80 border-zinc-200/60 hover:border-zinc-300 hover:shadow-zinc-200/50'}`}
               >
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
                   <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-3 py-1 rounded-lg shadow-sm">{itineraryDayLabel(selectedTrip.days,day)}</span>
                   <div className="flex items-center gap-2"><span className="text-xs text-zinc-400">{formatDate(day.date)}</span><DayRefreshButton day={day} busy={refreshTarget === `day-${dayIndex}`} disabled={regenerating || Boolean(refreshTarget)} onClick={() => refreshSaved(dayIndex)} /></div>
                 </div>
                 
-                {day.travelReservation && <p className="mb-2 text-xs font-semibold text-blue-700">{day.travelReservation.journeyId === 'onward' ? 'Onward journey' : 'Return journey'} · transport fixed</p>}
-                <h3 className="font-medium text-zinc-900 mb-1.5 group-hover:text-zinc-700 transition-colors">{day.title}</h3>
-                <p className="text-sm text-zinc-500 mb-3 line-clamp-2">{day.summary}</p>
+                {day.travelReservation && <p className="mb-1 text-[11px] sm:mb-2 sm:text-xs font-semibold text-blue-700">{day.travelReservation.journeyId === 'onward' ? 'Onward journey' : 'Return journey'} · transport fixed</p>}
+                <h3 className="text-sm sm:text-base font-medium text-zinc-900 mb-1 group-hover:text-zinc-700 transition-colors">{day.title}</h3>
+                <p className="text-xs sm:text-sm text-zinc-500 mb-2 sm:mb-3 line-clamp-2">{day.summary}</p>
                 <TravelDayCost plan={selectedTrip} day={day} />
-                <div className="space-y-1.5">
+                <div className="space-y-1 sm:space-y-1.5">
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg text-amber-600 shadow-sm">☀</span>
+                    <span className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 flex items-center justify-center bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg text-amber-600 shadow-sm">☀</span>
                     <span className="truncate">{travelActivityTitle(day, 'morning')}</span>
                     {day.morning?.coordinates && (
                       <span className="ml-2 text-[10px] text-blue-500">[{day.morning.coordinates.lat}, {day.morning.coordinates.lng}]</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-blue-600 shadow-sm">◐</span>
+                    <span className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg text-blue-600 shadow-sm">◐</span>
                     <span className="truncate">{travelActivityTitle(day, 'afternoon')}</span>
                     {day.afternoon?.coordinates && (
                       <span className="ml-2 text-[10px] text-blue-500">[{day.afternoon.coordinates.lat}, {day.afternoon.coordinates.lng}]</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span className="w-6 h-6 flex items-center justify-center bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg text-indigo-600 shadow-sm">☾</span>
+                    <span className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 flex items-center justify-center bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg text-indigo-600 shadow-sm">☾</span>
                     <span className="truncate">{travelActivityTitle(day, 'evening')}</span>
                     {day.evening?.coordinates && (
                       <span className="ml-2 text-[10px] text-blue-500">[{day.evening.coordinates.lat}, {day.evening.coordinates.lng}]</span>
@@ -1012,7 +1012,7 @@ Return ONLY valid JSON (keep same structure as original):
                   </div>
                 )}
                 <DayCostEstimate day={day} currency={selectedTrip.currency || 'INR'} />
-                <div className="mt-2 text-center">
+                <div className="hidden sm:block mt-2 text-center">
                   <span className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity">
                     Click to view/edit
                   </span>

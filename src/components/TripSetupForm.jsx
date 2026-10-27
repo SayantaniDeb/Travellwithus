@@ -48,7 +48,8 @@ export default function TripSetupForm({ destination, destinationProvided = false
   const fieldClass = 'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50';
 
   return (
-    <form onSubmit={event => { event.preventDefault(); onGenerate(); }} className="trip-setup overflow-visible rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
+    <form onSubmit={event => { event.preventDefault(); onGenerate(); }} className="trip-setup flex flex-col overflow-visible rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
+      <div className="trip-setup-content">
       <header className="rounded-t-3xl border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6 sm:py-5">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Trip details</p>
         <h1 className="text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-3xl">{destinationProvided ? <>Your trip to <span className="font-serif font-normal">{destination}</span></> : 'Plan your next trip'}</h1>
@@ -119,13 +120,14 @@ export default function TripSetupForm({ destination, destinationProvided = false
             ))}
           </div>
         </fieldset>
-        <div>
+      </div>
+      </div>
+        <div className="trip-setup-footer shrink-0 rounded-b-3xl border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
           <button type="submit" disabled={loading || !destination.trim() || !startDate || !endDate || startDate < today || endDate < startDate || daysBetween(startDate, endDate) >= 30 || Number(budgetAmount) < 0} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-4 focus-visible:outline-blue-200 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">
             {loading ? 'Generating your plan…' : 'Generate my plan'}<ArrowRightIcon className="h-4 w-4" />
           </button>
           <p className="mt-3 text-center text-[11px] text-slate-400">You can refresh any day or activity after your plan is ready.</p>
         </div>
-      </div>
     </form>
   );
 }

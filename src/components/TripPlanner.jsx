@@ -664,10 +664,10 @@ Offer different real activities with morning, afternoon and evening objects. Eac
   // Step 1: Date Selection
   if (step === 'dates') {
     return (
-      <div className="min-h-screen trip-page-background trip-setup-background">
+      <div className="trip-setup-page trip-page-background trip-setup-background">
         <Navbar />
-        <div className="pt-20 sm:pt-24 pb-24 px-4">
-          <div className="max-w-2xl mx-auto">
+        <div className="trip-setup-viewport px-3 sm:px-4">
+          <div className="h-full max-w-2xl mx-auto">
             <TripSetupForm
               destination={destination} destinationProvided={Boolean(searchParams.get('destination')?.trim())} setDestination={setDestination} sourceLocation={sourceLocation} setSourceLocation={setSourceLocation}
               startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate}
@@ -791,28 +791,28 @@ Offer different real activities with morning, afternoon and evening objects. Eac
                 <div
                   key={day.day}
                   onClick={() => { setSelectedDay(day); setStep('dayDetail'); }}
-                  className={`bg-white/80 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-4 cursor-pointer hover:border-zinc-300 hover:shadow-sm transition-all duration-200 group ${day.travelReservation ? 'travel-day-highlight' : ''}`}
+                  className={`bg-white/80 itinerary-preview-card backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-3 sm:p-4 cursor-pointer hover:border-zinc-300 hover:shadow-sm transition-all duration-200 group ${day.travelReservation ? 'travel-day-highlight' : ''}`}
                 >
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
                     <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-3 py-1 rounded-lg shadow-sm">{itineraryDayLabel(plan.days,day)}</span>
                     <div className="flex items-center gap-2"><span className="text-xs text-zinc-500">{formatDate(day.date)}</span><DayRefreshButton day={day} busy={refreshingDay === dayIndex} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} onClick={() => refreshDay(dayIndex)} /></div>
                   </div>
                   
-                  {day.travelReservation && <p className="mb-2 text-xs font-semibold text-blue-700">{day.travelReservation.journeyId === 'onward' ? 'Onward journey' : 'Return journey'} · transport fixed</p>}
-                  <h3 className="font-medium text-zinc-900 mb-1.5 group-hover:text-zinc-700 transition-colors">{day.title}</h3>
-                  <p className="text-sm text-zinc-500 mb-3 line-clamp-2">{day.summary}</p>
+                  {day.travelReservation && <p className="mb-1 text-[11px] sm:mb-2 sm:text-xs font-semibold text-blue-700">{day.travelReservation.journeyId === 'onward' ? 'Onward journey' : 'Return journey'} · transport fixed</p>}
+                  <h3 className="text-sm sm:text-base font-medium text-zinc-900 mb-1 group-hover:text-zinc-700 transition-colors">{day.title}</h3>
+                  <p className="text-xs sm:text-sm text-zinc-500 mb-2 sm:mb-3 line-clamp-2">{day.summary}</p>
                   <TravelDayCost plan={plan} day={day} />
-                <div className="space-y-1.5">
+                <div className="space-y-1 sm:space-y-1.5">
                     <div className="flex items-center gap-2 text-xs text-zinc-600">
-                      <span className="w-6 h-6 flex items-center justify-center bg-amber-100 rounded-lg text-amber-600">☀</span>
+                      <span className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 flex items-center justify-center bg-amber-100 rounded-lg text-amber-600">☀</span>
                       <span className="truncate">{travelActivityTitle(day, 'morning')}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-zinc-600">
-                      <span className="w-6 h-6 flex items-center justify-center bg-blue-100 rounded-lg text-blue-600">◐</span>
+                      <span className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 flex items-center justify-center bg-blue-100 rounded-lg text-blue-600">◐</span>
                       <span className="truncate">{travelActivityTitle(day, 'afternoon')}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-zinc-600">
-                      <span className="w-6 h-6 flex items-center justify-center bg-indigo-100 rounded-lg text-indigo-600">☾</span>
+                      <span className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 flex items-center justify-center bg-indigo-100 rounded-lg text-indigo-600">☾</span>
                       <span className="truncate">{travelActivityTitle(day, 'evening')}</span>
                     </div>
                   </div>

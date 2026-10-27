@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
+import { Plus, X, ChartNoAxesColumnIncreasing } from 'lucide-react';
 import { db, auth } from '../Firebase';
 import { onAuthStateChanged } from '../Firebase';
 import { 
@@ -374,7 +375,7 @@ function Community() {
               >
                 {getInitials(userProfile?.displayName || user.displayName || user.email)}
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <textarea
                   ref={textareaRef}
                   value={newPost}
@@ -389,7 +390,7 @@ function Community() {
                   <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={selectPhoto} disabled={posting} className="hidden" aria-label="Choose a community photo" />
                   <button type="button" disabled={posting} onClick={() => photoInputRef.current?.click()} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-blue-50 disabled:opacity-50">Add photo</button>
                   {/* Poll toggle */}
-                  <button type="button" className={`text-xs px-2 py-1 rounded ${pollActive ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500 hover:bg-blue-50'}`} onClick={() => setPollActive(v => !v)}>
+                  <button type="button" disabled={posting} aria-pressed={pollActive} className={`inline-flex items-center rounded-lg border border-transparent px-3 py-2 text-xs font-medium transition ${pollActive ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500 hover:bg-blue-50'}`} onClick={() => setPollActive(v => !v)}>
                     <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 17v-6m4 6V7m4 10v-3" /></svg>
                     Poll
                   </button>
@@ -404,24 +405,24 @@ function Community() {
                 {postError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{postError}</p>}
                 {/* Poll options UI */}
                 {pollActive && (
-                  <div className="mt-2 space-y-1">
-                    {pollOptions.map((opt, idx) => (
-                      <div key={idx} className="flex items-center gap-1">
-                        <input
-                          type="text"
-                          value={opt}
-                          onChange={e => handlePollOptionChange(idx, e.target.value)}
-                          className="flex-1 px-2 py-1 border border-zinc-200 rounded text-xs"
-                          placeholder={`Option ${idx + 1}`}
-                          maxLength={50}
-                        />
-                        {pollOptions.length > 2 && (
-                          <button type="button" className="text-red-500 text-xs px-1" onClick={() => removePollOption(idx)}>&times;</button>
-                        )}
-                      </div>
-                    ))}
-                    <button type="button" className="text-blue-600 text-xs mt-1" onClick={addPollOption}>+ Add Option</button>
-                  </div>
+                  <section aria-label="Poll options" className="community-poll-editor mt-3 rounded-2xl border border-blue-100 bg-slate-50 p-3 sm:p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><ChartNoAxesColumnIncreasing size={17} aria-hidden="true" /></span>
+                      <div className="min-w-0"><h3 className="text-sm font-semibold text-slate-900">Ask the community</h3><p className="text-[11px] text-slate-500">Add choices for travelers to vote on.</p></div>
+                    </div>
+                    <div className="space-y-2">
+                      {pollOptions.map((opt, idx) => (
+                        <div key={idx} className="flex min-w-0 items-center gap-2">
+                          <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-semibold tabular-nums text-blue-700">{idx + 1}</span>
+                          <input type="text" value={opt} onChange={e => handlePollOptionChange(idx, e.target.value)} disabled={posting}
+                            aria-label={`Poll option ${idx + 1}`} className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
+                            placeholder={`Option ${idx + 1}`} maxLength={50} />
+                          {pollOptions.length > 2 && <button type="button" disabled={posting} aria-label={`Remove option ${idx + 1}`} title="Remove option" className="flex h-9 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500" onClick={() => removePollOption(idx)}><X size={15} aria-hidden="true" /></button>}
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" disabled={posting} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:border-blue-400 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:opacity-50" onClick={addPollOption}><Plus size={15} aria-hidden="true" />Add option</button>
+                  </section>
                 )}
                 <div className="flex items-center justify-between mt-3">
                   <div className="text-xs text-zinc-400">
