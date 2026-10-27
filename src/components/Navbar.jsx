@@ -6,9 +6,8 @@ import { Disclosure, Menu, Transition } from '@headlessui/react'
 import { Bars3Icon, BellIcon, XMarkIcon, ArrowRightOnRectangleIcon, DocumentTextIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { NavLink, useNavigate, useLocation as useRouterLocation } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
-import { onAuthStateChanged } from '../Firebase'
-import { auth, db } from '../Firebase'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { auth } from '../Firebase'
+import { useProfileIdentity } from '../context/ProfileContext'
 import { useLocation } from '../context/LocationContext'
 import {
   HomeIcon,
@@ -132,9 +131,7 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
     <BackButton onClick={onBack} aria-label={backLabel} title={backLabel} className="mr-3">Back</BackButton>
   ) : null;
 
-  const [userPhoto, setUserPhoto] = useState(null);
-  const [userName, setUserName] = useState('');
-  const [user, setUser] = useState(null);
+  const { user, userPhoto, userName } = useProfileIdentity();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showSignInPopup, setShowSignInPopup] = useState(false);
   
@@ -218,65 +215,6 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
       setCanInstall(false);
     }
   };
-
-  // Random avatar styles from DiceBear
-  const AVATAR_STYLES = [
-    'adventurer', 'adventurer-neutral', 'avataaars', 'big-ears', 'big-smile',
-    'bottts', 'croodles', 'fun-emoji', 'icons', 'lorelei', 'micah', 'miniavs',
-    'notionists', 'open-peeps', 'personas', 'pixel-art', 'thumbs'
-  ];
-
-  // Generate a consistent random avatar URL based on user ID
-  const generateRandomAvatar = (seed) => {
-    // Use the seed to deterministically select a style
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-      hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const styleIndex = Math.abs(hash) % AVATAR_STYLES.length;
-    const style = AVATAR_STYLES[styleIndex];
-    return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}&backgroundColor=ffffff`;
-  };
-
-  // Fetch user profile photo
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (userObj) => {
-      setUser(userObj);
-      if (userObj) {
-        setUserName(userObj.displayName || userObj.email?.split('@')[0] || '');
-        try {
-          const profileRef = doc(db, 'user_profiles', userObj.uid);
-          const profileSnap = await getDoc(profileRef);
-          if (profileSnap.exists()) {
-            const data = profileSnap.data();
-            // Check if photoURL is a DiceBear avatar WITH white background
-            if (data.photoURL && data.photoURL.includes('dicebear.com') && data.photoURL.includes('backgroundColor=ffffff')) {
-              setUserPhoto(data.photoURL);
-            } else {
-              // Generate random avatar with white background
-              const randomAvatar = generateRandomAvatar(userObj.uid);
-              setUserPhoto(randomAvatar);
-              // Save to profile
-              await updateDoc(profileRef, { photoURL: randomAvatar });
-            }
-            if (data.displayName) setUserName(data.displayName);
-          } else {
-            // No profile exists - generate random avatar
-            const randomAvatar = generateRandomAvatar(userObj.uid);
-            setUserPhoto(randomAvatar);
-          }
-        } catch (error) {
-          console.error('Error fetching profile:', error);
-          // Fallback to random avatar
-          setUserPhoto(generateRandomAvatar(userObj.uid));
-        }
-      } else {
-        setUserPhoto(null);
-        setUserName('');
-      }
-    });
-    return () => unsubscribe();
-  }, []);
 
   // Get initials for avatar
   const getInitials = (name) => {

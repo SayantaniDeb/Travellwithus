@@ -626,3 +626,10 @@ html.dark .profile-cover { background: radial-gradient(ellipse at 15% 20%, #245c
 }
 
 .community-poll-editor input { border-radius: .75rem !important; border-color: #cbd5e1; }
+
+/* NativeSelect supplies its own chevron; clear any theme/plugin arrow image. */
+.native-select-control {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+}

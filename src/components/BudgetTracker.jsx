@@ -54,14 +54,13 @@ export default function BudgetTracker() {
     // If trip data is passed via navigation state (from trip planner)
     if (location.state?.tripData) {
       const tripData = location.state.tripData;
-      setTrip(tripData);
+      setTrip({ ...tripData, id: tripId });
       setTotalBudgetInput(location.state.budgetAmount?.toString() || '');
       setSelectedCurrency(location.state.currency || 'USD');
       setLoading(false);
-      return;
     }
 
-    // Otherwise, fetch from Firestore using tripId
+    // Keep the saved trip authoritative, including when navigation carries a preview.
     if (!tripId) {
       setLoading(false);
       return;

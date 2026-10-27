@@ -13,7 +13,7 @@ export function Label({ className = '', ...props }) {
 }
 
 export const NativeSelect = forwardRef(function NativeSelect({ className = '', children, ...props }, ref) {
-  return <div className="relative min-w-0"><select ref={ref} className={`${control} appearance-none pr-10 ${className}`} {...props}>{children}</select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-slate-500" /></div>;
+  return <div className="relative min-w-0"><select ref={ref} className={`${control} native-select-control appearance-none pr-10 ${className}`} {...props}>{children}</select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-slate-500" /></div>;
 });
 
 export function Button({ className = '', type = 'button', ...props }) {

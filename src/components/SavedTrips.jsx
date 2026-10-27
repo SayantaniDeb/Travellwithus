@@ -499,8 +499,9 @@ Return ONLY valid JSON (keep same structure as original):
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-zinc-100 to-zinc-50 flex items-center justify-center">
-        <LoadingSpinner label="Loading your trips…"/>
+      <div className="min-h-screen trip-page-background saved-trips-background">
+        <Navbar />
+        <div className="flex min-h-screen items-center justify-center px-4 pt-16 pb-24"><LoadingSpinner label="Loading your trips…"/></div>
       </div>
     );
   }

@@ -15,6 +15,7 @@ export default function BudgetTrackerPreview({ trip, userId, symbol, standalone 
   const localDate=()=>{const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;};
   const [amount,setAmount]=useState(''),[description,setDescription]=useState(''),[category,setCategory]=useState('food'),[date,setDate]=useState(localDate),[saving,setSaving]=useState(false),[message,setMessage]=useState('');
   const [editing,setEditing]=useState(null),[editAmount,setEditAmount]=useState(''),[rowBusy,setRowBusy]=useState(false),[rowError,setRowError]=useState('');
+  const [retry, setRetry] = useState(0);
   const [records, setRecords] = useState({ status: 'loading', expenses: [] });
   useEffect(() => {
     if (onDraftChange) { setRecords({ status: 'ready', expenses: trip.draftExpenses || [] }); return; }
@@ -27,12 +28,17 @@ export default function BudgetTrackerPreview({ trip, userId, symbol, standalone 
     const expenses = query(collection(db, 'users', userId, 'trips', trip.id, 'expenses'), orderBy('date', 'desc'));
     return onSnapshot(expenses, snapshot => {
       setRecords({ status: 'ready', expenses: snapshot.docs.map(document => ({ ...document.data(), id: document.id })) });
-    }, () => setRecords({ status: 'error', expenses: [] }));
-  }, [userId, trip.id, trip.draftExpenses, Boolean(onDraftChange)]);
+    }, error => {
+      console.error('Could not load tracker expenses:', error.code, error.message);
+      setRecords({ status: 'error', expenses: [], code: error.code });
+    });
+  }, [userId, trip.id, trip.draftExpenses, Boolean(onDraftChange), retry]);
 
   const ledger=useMemo(()=>budgetLedger(trip,records.expenses),[trip,records.expenses]);
   const remaining=Number(trip.budgetAmount)-ledger.total;
   const ready = records.status === 'ready';
+  const unavailable = records.status === 'error';
+  const unavailableText = unavailable ? 'Unavailable' : 'Loading…';
   const reliable = ready && ledger.invalid === 0 && ledger.missing === 0;
   const hasBudget = Number(trip.budgetAmount) > 0;
   const money = amount => `${symbol}${Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -80,11 +86,11 @@ export default function BudgetTrackerPreview({ trip, userId, symbol, standalone 
       </div>
       {ready && hasBudget && !reliable && remaining >= 0 && <p className="mt-3 text-xs leading-relaxed text-slate-500">The remaining amount is an upper limit; missing costs will reduce it.</p>}
       {reliable && hasBudget && <div className="mt-4"><div role="progressbar" aria-label="Budget allocated" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100,ledger.total/Number(trip.budgetAmount)*100)} aria-valuetext={`${money(ledger.total)} allocated of ${money(trip.budgetAmount)}`} className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div style={{ width: `${Math.min(100,ledger.total/Number(trip.budgetAmount)*100)}%` }} className={`h-full rounded-full ${remaining < 0 ? 'bg-amber-500' : 'bg-blue-600'}`} /></div><p className="mt-2 text-xs text-slate-500">{Math.round(ledger.total / Number(trip.budgetAmount) * 100)}% allocated</p></div>}
-      {records.status === 'error' && <p role="status" className="mt-4 text-sm text-amber-700">Could not load tracker expenses. Open the tracker to retry; no remaining balance has been assumed.</p>}
+      {records.status === 'error' && <div role="status" className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800"><p>{records.code === 'permission-denied' ? 'You do not have permission to read these expenses.' : 'Could not load additional expenses. Your plan estimates are still shown; the balance is unavailable.'}</p><button type="button" onClick={() => setRetry(value => value + 1)} className="mt-2 rounded-lg border border-amber-200 px-3 py-1 font-semibold">Retry loading expenses</button></div>}
       {ready && ledger.invalid > 0 && <p role="status" className="mt-4 text-xs text-amber-700">Some expenses have invalid amounts. The spending subtotal is incomplete; check them in the tracker.</p>}
       {onDraftChange && <p className="mt-3 text-xs text-slate-500">Draft tracker · save this trip to keep your costs in your account.</p>}
       {ready && records.expenses.length === 0 && <p className="mt-3 text-xs text-slate-500">Your plan estimates are listed below. Add extra costs as new rows.</p>}
-      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500"><span>Saved plan: <strong className="text-slate-900">{money(ledger.baseline)}</strong></span><span>Additional costs: <strong className="text-slate-900">{ready?money(ledger.added):'Loading…'}</strong></span></div>
+      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500"><span>Saved plan: <strong className="text-slate-900">{money(ledger.baseline)}</strong></span><span>Additional costs: <strong className="text-slate-900">{ready?money(ledger.added):unavailableText}</strong></span></div>
       {ledger.missing>0&&<p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">{ledger.missing} plan cost{ledger.missing===1?' is':'s are'} missing. The displayed total is partial.</p>}
       <div className="mt-4 sm:hidden">
         <ul aria-label="Trip cost items" className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200">
@@ -95,9 +101,9 @@ export default function BudgetTrackerPreview({ trip, userId, symbol, standalone 
             <div className="justify-self-end">{rowActions(row)}</div>
           </li>)}
         </ul>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-900"><span className="font-medium">{ledger.missing ? 'Recorded total (partial)' : 'Plan + additional costs'}</span><strong className="tabular-nums">{ready ? money(ledger.total) : 'Loading…'}</strong></div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-900"><span className="font-medium">{ledger.missing ? 'Recorded total (partial)' : 'Plan + additional costs'}</span><strong className="tabular-nums">{ready ? money(ledger.total) : unavailableText}</strong></div>
       </div>
-      <div className="mt-4 hidden sm:block overflow-x-auto rounded-xl border border-slate-200"><table className="w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3 font-medium">Date</th><th className="p-3 font-medium">Cost item</th><th className="p-3 font-medium">Source</th><th className="p-3 text-right font-medium">Amount</th><th className="p-3 font-medium">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{ledger.rows.map(row=><tr key={row.id} className={row.type==='additional'?'bg-blue-50/40':''}><td className="whitespace-nowrap p-3 text-slate-500">{row.date||'—'}</td><td className="min-w-[160px] p-3 text-slate-900">{row.description||categoryNames[row.category]||'Additional cost'}</td><td className="p-3"><span className={`whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-medium ${row.type==='additional'?'bg-blue-50 text-blue-700':'bg-slate-100 text-slate-600'}`}>{row.type==='estimate'?'AI estimate':row.type==='journey'?'Journey cost':'Added cost'}</span></td><td className="whitespace-nowrap p-3 text-right font-semibold tabular-nums text-slate-900">{rowAmount(row)}</td><td className="p-2">{rowActions(row)}</td></tr>)}</tbody><tfoot className="border-t border-slate-200 bg-slate-50"><tr><td colSpan={3} className="p-3 font-semibold">{ledger.missing?'Recorded total (partial)':'Plan + additional costs'}</td><td className="p-3 text-right font-bold tabular-nums">{ready?money(ledger.total):'Loading…'}</td><td/></tr></tfoot></table></div>
+      <div className="mt-4 hidden sm:block overflow-x-auto rounded-xl border border-slate-200"><table className="w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3 font-medium">Date</th><th className="p-3 font-medium">Cost item</th><th className="p-3 font-medium">Source</th><th className="p-3 text-right font-medium">Amount</th><th className="p-3 font-medium">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{ledger.rows.map(row=><tr key={row.id} className={row.type==='additional'?'bg-blue-50/40':''}><td className="whitespace-nowrap p-3 text-slate-500">{row.date||'—'}</td><td className="min-w-[160px] p-3 text-slate-900">{row.description||categoryNames[row.category]||'Additional cost'}</td><td className="p-3"><span className={`whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-medium ${row.type==='additional'?'bg-blue-50 text-blue-700':'bg-slate-100 text-slate-600'}`}>{row.type==='estimate'?'AI estimate':row.type==='journey'?'Journey cost':'Added cost'}</span></td><td className="whitespace-nowrap p-3 text-right font-semibold tabular-nums text-slate-900">{rowAmount(row)}</td><td className="p-2">{rowActions(row)}</td></tr>)}</tbody><tfoot className="border-t border-slate-200 bg-slate-50"><tr><td colSpan={3} className="p-3 font-semibold">{ledger.missing?'Recorded total (partial)':'Plan + additional costs'}</td><td className="p-3 text-right font-bold tabular-nums">{ready?money(ledger.total):unavailableText}</td><td/></tr></tfoot></table></div>
       {rowError&&<p role="alert" className="mt-2 text-xs text-red-700">{rowError}</p>}
       <p className="mt-2 text-[11px] leading-relaxed text-slate-500">AI estimates are not actual spending. Add only extra costs to avoid counting planned items twice.</p>
       <div className="mt-4 border-t border-slate-200 pt-4 sm:mt-6 sm:pt-6">
