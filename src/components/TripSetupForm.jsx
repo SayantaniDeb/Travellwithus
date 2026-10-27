@@ -50,7 +50,7 @@ export default function TripSetupForm({ destination, destinationProvided = false
   return (
     <form onSubmit={event => { event.preventDefault(); onGenerate(); }} className="trip-setup flex flex-col overflow-visible rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
       <div className="trip-setup-content">
-      <header className="rounded-t-3xl border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6 sm:py-5">
+      <header className="trip-setup-header rounded-t-3xl border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6 sm:py-5">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Trip details</p>
         <h1 className="text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-3xl">{destinationProvided ? <>Your trip to <span className="font-serif font-normal">{destination}</span></> : 'Plan your next trip'}</h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-500">Choose your route, dates, and budget.</p>

@@ -633,3 +633,10 @@ html.dark .profile-cover { background: radial-gradient(ellipse at 15% 20%, #245c
   appearance: none !important;
   background-image: none !important;
 }
+
+/* Keep the setup header on a readable surface in each theme. */
+.trip-setup-header { background-color: #f8fafc; }
+html.dark .trip-setup .trip-setup-header {
+  background-color: #131f31 !important;
+  border-color: #2b3e57 !important;
+}
