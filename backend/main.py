@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 # Add api directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

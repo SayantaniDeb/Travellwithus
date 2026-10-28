@@ -15,3 +15,7 @@ The server identity needs Firestore read/write access and Firebase Authenticatio
 Endpoints: GET `/api/credits`; admin-only GET `/api/admin/users?page_token=...`; admin-only POST `/api/admin/users/{uid}/credits` with `{ "amount": 5 }`. User pagination is 50 accounts per page.
 
 The current implementation does not run a daily job: each date gets a new counter document. A worker crash during provider execution can leave a reserved credit charged for that day; administrators can compensate with a grant. Configure retention/TTL for old request receipts if desired. Daily allowances supplement provider-wide rate limits and concurrency limits; they do not replace them.
+
+## Local development
+
+Local development can use an `authorized_user` ADC file from an existing, explicitly authorized Firebase CLI session. The local file is stored under `.secrets/`, which is ignored by Git, and referenced from `backend/.env`. Do not deploy personal refresh credentials to Render; use a dedicated service account in production.

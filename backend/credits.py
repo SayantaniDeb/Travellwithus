@@ -1,5 +1,6 @@
 """Durable daily AI credits. All mutations run server-side in Firestore transactions."""
 import os
+import json
 import uuid
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -25,7 +26,12 @@ def admin_app():
     from firebase_admin import credentials
     try:
         path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-        credential = credentials.Certificate(path) if path else credentials.ApplicationDefault()
+        if path:
+            with open(path) as credential_file:
+                kind=json.load(credential_file).get('type')
+            credential=credentials.Certificate(path) if kind=='service_account' else credentials.ApplicationDefault()
+        else:
+            credential=credentials.ApplicationDefault()
         # Resolve eagerly: otherwise missing ADC surfaces later as a misleading permissions error.
         credential.get_credential()
         return firebase_admin.initialize_app(credential,
