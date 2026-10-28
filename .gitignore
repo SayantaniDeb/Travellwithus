@@ -35,3 +35,43 @@ __pycache__/
 # Rendered launch video artifacts
 /out/
 .vercel
+
+# Local environment files; keep documented example templates
+.env.*
+!.env.example
+!.env.*.example
+
+# Dependencies and build caches in any workspace folder
+node_modules/
+.venv/
+venv/
+.pnp.*
+.vite/
+.vite-temp/
+*.tsbuildinfo
+
+# Python bytecode, test output, and tool caches
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local logs and browser-test artifacts
+*.log
+playwright-report/
+test-results/
+
+# Private credentials and local certificates
+*service_account*.json
+application_default_credentials.json
+credentials.json
+*.private-key.json
+*.pem
+*.key
+
+# Local automated tests
+/tests/
+/backend/tests/

@@ -1,3 +1,4 @@
+import { aiFetch } from '../utils/aiFetch';
 import { API_BASE } from '../utils/apiBase';
 import React, { useState } from 'react';
 import { useLocation } from '../context/LocationContext';
@@ -87,7 +88,7 @@ Generate exactly ${numDays} days with incrementing dates starting from ${startDa
       let text;
 
       // Use backend proxy for LLM completions
-      response = await fetch(`${API_URL}/api/completions`, {
+      response = await aiFetch(`${API_URL}/api/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -63,9 +63,12 @@ def authenticated_user(request):
     from firebase_admin import auth
     app = admin_app()
     try:
-        return auth.verify_id_token(header[7:], app=app, check_revoked=True)
+        claims = auth.verify_id_token(header[7:], app=app, check_revoked=True)
     except Exception:
         raise HTTPException(401, 'Your session has expired. Please sign in again.')
+    if claims.get('firebase', {}).get('sign_in_provider') == 'anonymous':
+        raise HTTPException(401, 'Sign in with an account to post a photo.')
+    return claims
 
 
 def check_rate(uid):

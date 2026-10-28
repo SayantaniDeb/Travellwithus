@@ -22,11 +22,14 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import AI Router
+from planning_auth import require_planning_account
 from ai_router import ai_router, FeatureType, semantic_cache, rate_limiter
 
 app = FastAPI(title="TravelWithUs API Proxy")
 from community_images import router as community_images_router
 app.include_router(community_images_router)
+from credits import router as credits_router, reserve_credit, finish_credit
+app.include_router(credits_router)
 
 # CORS configuration
 from api_safety import PublicApiGuard
@@ -76,8 +79,8 @@ class CompletionRequest(BaseModel):
 
 # ============ Smart LLM Completions with Multi-Model Routing ============
 
-@app.post("/api/completions")
-async def smart_completions(request: CompletionRequest):
+@app.post("/api/completions", dependencies=[Depends(require_planning_account)])
+async def smart_completions(request: CompletionRequest, claims=Depends(require_planning_account)):
     """
     Smart LLM completions endpoint with:
     - Feature-aware model routing
@@ -88,21 +91,21 @@ async def smart_completions(request: CompletionRequest):
     """
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
     
-    # Route through AI router
-    result = await ai_router.route(
-        messages=messages,
-        endpoint_hint=request.feature_hint,
-        max_tokens=request.max_tokens,
-        temperature=request.temperature,
-        use_cache=request.use_cache
-    )
-    
-    # Failed providers must not masquerade as a successful, empty itinerary.
-    if result.fallback_level.value == "failed" or not isinstance(result.content, str) or not result.content.strip():
-        raise HTTPException(
-            status_code=503,
-            detail="AI planning is temporarily unavailable. Please try again later."
+    reservation = reserve_credit(claims)
+    success = False
+    try:
+        result = await ai_router.route(
+            messages=messages,
+            endpoint_hint=request.feature_hint,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+            use_cache=request.use_cache
         )
+        if result.fallback_level.value == 'failed' or not isinstance(result.content,str) or not result.content.strip():
+            raise HTTPException(503, 'AI planning is temporarily unavailable. Please try again later.')
+        success = True
+    finally:
+        finish_credit(reservation, success)
 
     # Return in OpenAI-compatible format
     return {

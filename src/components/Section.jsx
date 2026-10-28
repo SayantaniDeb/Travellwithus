@@ -1,3 +1,4 @@
+import { useProfileIdentity } from '../context/ProfileContext';
 
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +14,7 @@ const TravelHeroBackground = lazy(() => import('./demos/LegacyCarHero'));
 import FeatureOverview from './FeatureOverview';
 
 function SearchBar({ isStandalone = false }) {
+  const { user } = useProfileIdentity();
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
@@ -34,7 +36,7 @@ function SearchBar({ isStandalone = false }) {
               Start Planning Your Trip
             </h2>
             <p className="text-gray-600 mb-8">
-              Enter your destination and let AI create the perfect itinerary for you
+              {user ? 'Enter your destination and let AI create an itinerary for you' : 'Choose your destination and build your own itinerary'}
             </p>
             <form id="destination-search" onSubmit={handleSubmit} className="max-w-xl mx-auto">
               <div className="relative">
@@ -57,7 +59,7 @@ function SearchBar({ isStandalone = false }) {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-3">
-                Powered by AI • Get personalized travel recommendations
+                {user ? 'Powered by AI • Get personalized travel recommendations' : 'Guests get a blank itinerary to fill in manually. Sign in for AI-generated plans and estimates.'}
               </p>
             </form>
           </div>
@@ -112,7 +114,7 @@ function SearchBar({ isStandalone = false }) {
           </button>
         </div>
         <p className="text-xs text-gray-500 mt-2 text-center sm:text-left">
-          Powered by AI • Get personalized travel recommendations
+          {user ? 'Powered by AI • Get personalized travel recommendations' : 'Guests get a blank itinerary to fill in manually. Sign in for AI-generated plans and estimates.'}
         </p>
       </form>
     </div>

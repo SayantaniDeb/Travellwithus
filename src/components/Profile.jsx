@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { safeExternalUrl } from '../utils/safeUrl';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
@@ -437,6 +438,7 @@ function Profile() {
 
               {/* Name and email */}
               <div className="mb-3 text-center">
+                {auth?.currentUser?.emailVerified && auth.currentUser.email?.toLowerCase()==='sayantani.1001@gmail.com' && <Link to="/admin/users" className="mb-3 inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Admin · Users & credits</Link>}
                 <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-900">
                   {profile.displayName || 'Traveler'}
                 </h1>

@@ -1,3 +1,6 @@
+import { aiFetch } from '../utils/aiFetch';
+import SavedStaysGate from './SavedStaysGate';
+import LoadingSpinner from './LoadingSpinner';
 import { API_BASE } from '../utils/apiBase';
 import { safeExternalUrl } from '../utils/safeUrl';
 import BackButton from './BackButton';
@@ -604,7 +607,7 @@ const API_URL = API_BASE;
 // Helper function to call AI via backend proxy
 const callAI = async (model, prompt, maxTokens = 8000) => {
   let response;
-  try { response = await fetch(`${API_URL}/api/completions`, {
+  try { response = await aiFetch(`${API_URL}/api/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -627,6 +630,8 @@ const callAI = async (model, prompt, maxTokens = 8000) => {
 };
 
 export default function HotelSearch() {
+  const [staysUser, setStaysUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [location, setLocation] = useState('');
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
@@ -650,6 +655,7 @@ export default function HotelSearch() {
   useEffect(() => {
     let stop = () => {};
     const unsubscribe = onAuthStateChanged(auth, user => {
+      setStaysUser(user); setAuthReady(true);
       stop(); setAvailableTrips([]);
       if (user) stop = onSnapshot(collection(db, 'users', user.uid, 'trips'), snapshot => setAvailableTrips(snapshot.docs.map(record => ({ ...record.data(), id: record.id }))), () => {});
     });
@@ -692,7 +698,7 @@ export default function HotelSearch() {
 
   // Function to toggle hotel shortlisting
   const toggleShortlist = async (hotel) => {
-    if (!auth?.currentUser) {
+    if (!auth?.currentUser || auth.currentUser.isAnonymous) {
       alert('Please sign in to shortlist hotels');
       return;
     }
@@ -710,7 +716,7 @@ export default function HotelSearch() {
   };
 
   const chooseResultStay = async (hotel, targetTrip = linkedTrip) => {
-    if (!auth.currentUser) { navigate('/login'); return; }
+    if (!auth.currentUser || auth.currentUser.isAnonymous) { navigate('/login'); return; }
     if (!targetTrip?.id) { setAssigningHotel(hotelKey(hotel)); return; }
     setChoosingStay(hotelKey(hotel)); setError(null); setStayError(null); setStayMessage('');
     const hotelData = JSON.parse(JSON.stringify({ ...hotel, id: `${targetTrip.id}::${hotel.name}-${hotel.price}`, location,
@@ -961,6 +967,9 @@ Return ONLY valid JSON:
       setLoading(false);
     }
   };
+
+  if (!authReady) return <div className="min-h-screen trip-page-background stays-background"><Navbar/><div className="flex min-h-screen items-center justify-center"><LoadingSpinner label="Opening saved stays…"/></div></div>;
+  if (!staysUser) return <SavedStaysGate savedOnly={showSaved} onBrowse={() => navigate('/home')}/>;
 
   return (
     <div className="min-h-screen trip-page-background stays-background">

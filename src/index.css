@@ -708,3 +708,15 @@ html.dark .meal-card-lunch .flex-1 p:first-child { color: #6ee7b7 !important; }
   .mobile-trip-accordion-content .journey-empty-state > section { margin-top: 16px; margin-bottom: 0; padding: 12px; border-radius: 12px; }
   .mobile-trip-accordion-content .journey-tickets > p:last-child { line-height: 1.6; }
 }
+
+html.dark .community-access-overlay { background-color: rgba(11, 18, 32, .5) !important; }
+html.dark .community-access-panel { background-color: rgba(19, 31, 49, .92) !important; }
+
+.manual-day-dialog { height: 100dvh; }
+@media (max-height: 600px) {
+  .manual-day-panel { max-height: calc(100dvh - 16px); }
+}
+
+html.dark .chosen-stay-badge { background-color: #143c30 !important; border-color: #287358 !important; color: #91efbf !important; }
+
+html.dark .credit-coin { background-color:#382c12 !important; border-color:#b98a22 !important; color:#ffdc77 !important; }

@@ -4,7 +4,7 @@ import { consumePlannerReturn } from '../utils/authReturn';
 import ThemeToggle from './ThemeToggle';
 import React, { useCallback, useEffect, useState } from 'react';
 import { auth, provider, db } from '../Firebase';
-import { signInWithPopup, getRedirectResult, createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
+import { browserPopupRedirectResolver, signInWithPopup, getRedirectResult, createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import logo1 from '../img/54.jpg';
 
@@ -87,7 +87,7 @@ function LoginForm() {
   // Check for redirect result on component mount
   useEffect(() => {
     if (!auth) return;
-    getRedirectResult(auth)
+    getRedirectResult(auth, browserPopupRedirectResolver)
       .then(async (result) => {
         if (result?.user) {
           setValue(result.user.email)
@@ -109,7 +109,7 @@ function LoginForm() {
     setError('')
     
       // Try popup method first
-      signInWithPopup(auth, provider)
+      signInWithPopup(auth, provider, browserPopupRedirectResolver)
         .then(async (data) => {
           setValue(data.user.email)
           localStorage.setItem("email", data.user.email)

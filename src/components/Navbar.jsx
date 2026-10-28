@@ -16,7 +16,8 @@ import {
   ChatBubbleLeftRightIcon,
   BuildingOfficeIcon,
   MapPinIcon,
-  HeartIcon
+  HeartIcon,
+  ClipboardDocumentListIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'My Trips', href: '/saved-trips', current: false },
   { name: 'Community', href: '/community', current: false },
   { name: 'Stays', href: '/hotels', current: false },
+  { name: 'Checklist', href: '/Todolist', current: false },
 ]
 
 const navIcons = [
@@ -31,7 +33,7 @@ const navIcons = [
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   BuildingOfficeIcon,
-  HeartIcon
+  ClipboardDocumentListIcon
 ];
 
 function classNames(...classes) {
@@ -243,8 +245,14 @@ export default function Navbar({ onBack, backLabel = 'Go back' } = {}) {
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 md:w-6 md:h-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
                   </svg>
-                  <span className='font-bold font-serif text-base sm:text-lg md:text-2xl'>TravellWithUs</span>
+                  <span className='font-bold font-serif text-base sm:text-lg md:text-2xl lg:hidden xl:inline'>TravellWithUs</span>
                 </NavLink>
+              </div>
+              <div role="navigation" aria-label="Main navigation" className="absolute left-1/2 hidden -translate-x-1/2 items-center justify-center gap-3 lg:flex">
+                {navigation.map((item, index) => {
+                  const Icon = navIcons[index];
+                  return <NavLink key={item.href} to={item.href} className={({isActive}) => `${isActive ? 'nav-feature-active bg-gray-900 text-white' : 'text-slate-600 hover:bg-slate-100'} flex min-w-12 flex-col items-center justify-center rounded-md px-2 py-1 text-xs font-medium`}><Icon aria-hidden="true" className="mb-0.5 h-5 w-5"/><span className="text-[10px]">{item.name}</span></NavLink>;
+                })}
               </div>
               {/* Only location badge and profile icon (question mark) for signed out */}
               <div className="flex items-center gap-2 sm:gap-3">

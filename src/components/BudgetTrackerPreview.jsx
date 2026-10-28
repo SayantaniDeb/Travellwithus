@@ -10,7 +10,7 @@ import { Button, Input, Label, NativeSelect } from './ui/form-controls';
 
 const categoryNames = { accommodation: 'Accommodation', food: 'Food & dining', transport: 'Transport', activities: 'Activities', shopping: 'Shopping', other: 'Other' };
 
-export default function BudgetTrackerPreview({ trip, userId, symbol, standalone = false, readOnlyEstimates = false, onDraftChange }) {
+export default function BudgetTrackerPreview({ trip, userId, symbol, standalone = false, readOnlyEstimates = false, onDraftChange, deviceSaved = false }) {
   const formId = useId();
   const localDate=()=>{const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;};
   const [amount,setAmount]=useState(''),[description,setDescription]=useState(''),[category,setCategory]=useState('food'),[date,setDate]=useState(localDate),[saving,setSaving]=useState(false),[message,setMessage]=useState('');
@@ -47,8 +47,13 @@ export default function BudgetTrackerPreview({ trip, userId, symbol, standalone 
     const value=Number(amount);
     if(!Number.isFinite(value)||value<=0||!date||(!onDraftChange&&(!userId||!trip.id||!db))){setMessage('Enter a valid amount and date to log an expense.');return;}
     if (onDraftChange) {
-      onDraftChange({draftExpenses:[...(trip.draftExpenses || []),{id:crypto.randomUUID(),amount:value,description:description.trim()||categoryNames[category],category,date}]});
-      setAmount('');setDescription('');setMessage('Cost added to this draft. Save the trip to keep it in your account.');return;
+      setSaving(true);
+      try {
+        await onDraftChange({draftExpenses:[...(trip.draftExpenses || []),{id:crypto.randomUUID(),amount:value,description:description.trim()||categoryNames[category],category,date}]});
+        setAmount('');setDescription('');setMessage(deviceSaved ? 'Cost saved on this device.' : 'Cost added to this draft. Save the trip to keep it.');
+      } catch (err) { setMessage(err.message || 'Could not save this cost. Your entries are kept.'); }
+      finally { setSaving(false); }
+      return;
     }
     setSaving(true);setMessage('');
     try{await addDoc(collection(db,'users',userId,'trips',trip.id,'expenses'),{amount:value,description:description.trim()||categoryNames[category],category,date,createdAt:new Date()});setAmount('');setDescription('');setMessage('Expense added. Your spending summary updates automatically.');}
@@ -62,7 +67,7 @@ export default function BudgetTrackerPreview({ trip, userId, symbol, standalone 
     setRowBusy(true);setRowError('');
     try{
       if(onDraftChange){
-        onDraftChange(row.type==='additional'?{draftExpenses:clear?(trip.draftExpenses||[]).filter(item=>item.id!==row.expenseId):(trip.draftExpenses||[]).map(item=>item.id===row.expenseId?{...item,amount:value}:item)}:estimateRowPatch(trip,row,value));
+        await onDraftChange(row.type==='additional'?{draftExpenses:clear?(trip.draftExpenses||[]).filter(item=>item.id!==row.expenseId):(trip.draftExpenses||[]).map(item=>item.id===row.expenseId?{...item,amount:value}:item)}:estimateRowPatch(trip,row,value));
         setEditing(null);return;
       }
       if(row.type==='additional'){const ref=doc(db,'users',userId,'trips',trip.id,'expenses',row.expenseId);if(clear)await deleteDoc(ref);else await updateDoc(ref,{amount:value});}

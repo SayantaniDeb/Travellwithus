@@ -1,0 +1,8 @@
+// Merge into /databases/{database}/documents. Remove overlapping broad grants.
+// Only the trusted backend's Admin SDK can modify credit records.
+match /ai_credit_accounts/{document=**} {
+  allow read, write: if false;
+}
+match /ai_credit_grants/{document=**} {
+  allow read, write: if false;
+}

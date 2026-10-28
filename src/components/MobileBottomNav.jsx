@@ -1,13 +1,14 @@
 import { Link, useLocation } from 'react-router-dom';
-import { MagnifyingGlassIcon, CalendarDaysIcon, BuildingOfficeIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, CalendarDaysIcon, BuildingOfficeIcon, ChatBubbleLeftRightIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
 
 const primary = [
   { name: 'Explore', href: '/home', icon: MagnifyingGlassIcon },
   { name: 'Trips', href: '/saved-trips', icon: CalendarDaysIcon },
   { name: 'Stays', href: '/hotels', icon: BuildingOfficeIcon },
+  { name: 'Checklist', href: '/Todolist', icon: ClipboardDocumentListIcon },
 ];
 const secondary = [
-  { name: 'Community', href: '/community', icon: ChatBubbleLeftRightIcon },
+  { name: 'Community', href: '/community', icon: ChatBubbleLeftRightIcon, ClipboardDocumentListIcon },
 ];
 export default function MobileBottomNav() {
   const { pathname } = useLocation();

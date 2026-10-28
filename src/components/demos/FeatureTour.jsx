@@ -16,7 +16,7 @@ export function FeatureTourVideo({ values, destination, onAction, onStep, onDest
   return <>{FEATURES.map((feature,index)=><Sequence key={feature.id} from={index*DEMO_FRAMES} durationInFrames={DEMO_FRAMES}><FeatureDemoVideo feature={feature} value={values[feature.id]} state={edits?.[feature.id]||{}} onEdit={patch=>onEdit(feature.id,patch)} destination={destination} onAction={value=>onAction(feature.id,value)} onStep={step=>onStep(index,step)} onDestinationChange={onDestinationChange} paused={paused} onTogglePlayback={onTogglePlayback} onNext={onNext} seamless /></Sequence>)}</>;
 }
 export default function FeatureTour() {
-  const [signedIn,setSignedIn]=useState(!!auth?.currentUser);
+  const [signedIn,setSignedIn]=useState(Boolean(auth?.currentUser && !auth.currentUser.isAnonymous));
   useEffect(()=>onAuthStateChanged(auth,user=>setSignedIn(!!user)),[]);
   const player=useRef(null),tabs=useRef([]),navigate=useNavigate();
   const [paused,setPaused]=useState(()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches);

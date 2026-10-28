@@ -2,6 +2,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 // ...existing code...
 import { Navigate, createBrowserRouter, RouterProvider, Route, createRoutesFromElements } from "react-router-dom";
 import React, { Suspense, lazy } from 'react';
+const AdminUsers = lazy(() => import('./components/AdminUsers'));
 const LoginForm = lazy(() => import('./components/LoginForm'));
 const HotelSearch = lazy(() => import('./components/HotelSearch'));
 import Layout from './components/Layout';
@@ -34,6 +35,7 @@ const router = createBrowserRouter(
         <Route path="/budgets" element={<BudgetList/>}/>
         <Route path="/budget/:tripId" element={<BudgetTracker/>}/>
         <Route path="/community" element={<Community/>}/>
+        <Route path="/admin/users" element={<AdminUsers/>}/>
         <Route path="/profile" element={<Profile/>}/>
         <Route path="/login" element={<LoginForm/>}/>
         <Route path="*" element={<div className="min-h-screen flex items-center justify-center"><div className="text-center"><h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1><p className="text-gray-600">Page not found</p></div></div>}/>

@@ -32,7 +32,7 @@ function Slider({ id, label, min, max, value, step = 1, onChange, valueText }) {
 
 export default function TripSetupForm({ destination, destinationProvided = false, setDestination, sourceLocation, setSourceLocation, startDate, setStartDate,
   endDate, setEndDate, budgetAmount, setBudgetAmount, currency, setCurrency, currencies,
-  includeHotels, setIncludeHotels, includeTravel, setIncludeTravel, loading, error, onGenerate }) {
+  includeHotels, setIncludeHotels, includeTravel, setIncludeTravel, loading, error, onGenerate, manual = false }) {
   const { locationName, requestLocation, loading: locating, error: locationError } = useLocation();
   const today = localDate();
   const departure = startDate || today;
@@ -124,9 +124,9 @@ export default function TripSetupForm({ destination, destinationProvided = false
       </div>
         <div className="trip-setup-footer shrink-0 rounded-b-3xl border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
           <button type="submit" disabled={loading || !destination.trim() || !startDate || !endDate || startDate < today || endDate < startDate || daysBetween(startDate, endDate) >= 30 || Number(budgetAmount) < 0} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline focus-visible:outline-4 focus-visible:outline-blue-200 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">
-            {loading ? 'Generating your plan…' : 'Generate my plan'}<ArrowRightIcon className="h-4 w-4" />
+            {loading ? 'Generating your plan…' : manual ? 'Create my blank itinerary' : 'Generate my plan'}<ArrowRightIcon className="h-4 w-4" />
           </button>
-          <p className="mt-3 text-center text-[11px] text-slate-400">You can refresh any day or activity after your plan is ready.</p>
+          <p className="mt-3 text-center text-[11px] text-slate-400">{manual ? 'Guest planning is manual. Sign in for AI-generated activities and estimates.' : 'You can refresh any day or activity after your plan is ready.'}</p>
         </div>
     </form>
   );

@@ -5,6 +5,8 @@ export function vehicleCost({ distanceKm, energyType, efficiency, unitPrice, cha
   return { units, energyCost: units * price, total: Math.round((units * price + extra) * 100) / 100 };
 }
 export function legDate(plan, direction) {
+  const info=direction==='return'?plan.travelInfo?.returnJourney:plan.travelInfo;
+  if(info?.manualDate)return info.manualDate;
   return plan.travelSchedule?.journeys?.find(item => item.id === direction)?.startDate || (direction === 'return' ? plan.endDate : plan.startDate) || '';
 }
 export function savedLegCost(plan, direction) {

@@ -5,16 +5,16 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import Spinner from './ui/Spinner';
 import LoadingImage from './ui/LoadingImage';
-import { Plus, X, ChartNoAxesColumnIncreasing } from 'lucide-react';
+import { Plus, X, ChartNoAxesColumnIncreasing, LockKeyhole } from 'lucide-react';
 import { db, auth } from '../Firebase';
 import { onAuthStateChanged } from '../Firebase';
-import { 
-  collection, 
-  addDoc, 
-  deleteDoc, 
-  doc, 
-  onSnapshot, 
-  query, 
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
   orderBy,
   updateDoc,
   arrayUnion,
@@ -28,10 +28,11 @@ const PHOTO_LIMIT = 5 * 1024 * 1024;
 function Community() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newPost, setNewPost] = useState('');
+  const [newPost, setNewPost] = useState(() => { try { return sessionStorage.getItem('community-draft') || ''; } catch { return ''; } });
   const [posting, setPosting] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyText, setReplyText] = useState('');
@@ -53,6 +54,7 @@ function Community() {
   const [reportedPhotos, setReportedPhotos] = useState({});
 
   useEffect(() => {
+    if (!user) return;
     const controller = new AbortController();
     let active = true;
     const timer = setTimeout(() => controller.abort(), 15000);
@@ -62,7 +64,7 @@ function Community() {
       .catch(() => { if (active) setPhotoStatus({ ready: false, message: 'Photo posting is unavailable. You can still share text and polls.' }); })
       .finally(() => { clearTimeout(timer); if (active) setCheckingPhotoStatus(false); });
     return () => { active = false; clearTimeout(timer); controller.abort(); };
-  }, []);
+  }, [user?.uid]);
   useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.preview); }, [photo]);
 
   useEffect(() => {
@@ -98,6 +100,7 @@ function Community() {
   };
 
   const photoRequest = async (path, method = 'POST', payload) => {
+    if (!user) throw new Error('Sign in to share or report photos.');
     const token = await user.getIdToken();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 90000);
@@ -126,9 +129,12 @@ function Community() {
 
   // Auth listener and fetch profile
   useEffect(() => {
+    if (!auth) { setAuthReady(true); return; }
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
+      setAuthReady(true);
+      setUserProfile(null);
+      if (currentUser && !currentUser.isAnonymous) {
         // Fetch user profile from Firestore
         try {
           const profileRef = doc(db, 'user_profiles', currentUser.uid);
@@ -144,8 +150,13 @@ function Community() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch posts
+  // Guests never subscribe to protected community data.
   useEffect(() => {
+    setPosts([]);
+    setPostError('');
+    if (!user) { setLoading(false); return; }
+    setLoading(true);
+    if (!db) { setLoading(false); setPostError('Community is not configured in this environment.'); return; }
     const postsRef = collection(db, 'community_posts');
     const q = query(postsRef, orderBy('createdAt', 'desc'));
 
@@ -158,11 +169,12 @@ function Community() {
       setLoading(false);
     }, (error) => {
       console.error('Error fetching posts:', error);
+      setPostError('Could not load community posts. Check your connection and try again.');
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user?.uid]);
 
   // Auto-resize textarea
   const handleTextareaChange = (e) => {
@@ -189,17 +201,25 @@ function Community() {
     }
   };
 
+  const requireSignIn = () => {
+    if (user) return true;
+    try { sessionStorage.setItem('community-draft', newPost); } catch { /* Draft stays in the current page if storage is unavailable. */ }
+    navigate('/login');
+    return false;
+  };
+
   // Create new post
   const handleCreatePost = async () => {
-    if ((!newPost.trim() && !pollActive && !photo) || !user || posting || (photo && (!photoPermission || !photoStatus.ready))) return;
+    if (!requireSignIn()) return;
+    if ((!newPost.trim() && !pollActive && !photo) || posting || (photo && (!photoPermission || !photoStatus.ready))) return;
 
     setPosting(true);
     setPostStage(photo ? 'Preparing photo…' : 'Publishing…');
     setPostError('');
     try {
       // Use profile data if available, otherwise fallback to auth data
-      const authorName = userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'Anonymous';
-      const authorPhoto = userProfile?.photoURL || user.photoURL || null;
+      const authorName = userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'Traveler';
+      const authorPhoto = userProfile?.photoURL || user?.photoURL || null;
       // Poll data
       let poll = null;
       if (pollActive) {
@@ -230,6 +250,7 @@ function Community() {
       setPhoto(null);
       setPhotoPermission(false);
       setNewPost('');
+      try { sessionStorage.removeItem('community-draft'); } catch { /* Published successfully. */ }
       setPollOptions(['', '']);
       setPollActive(false);
       if (textareaRef.current) {
@@ -244,12 +265,12 @@ function Community() {
 
   // Like/Unlike post
   const handleLike = async (postId) => {
-    if (!user) return;
+    if (!requireSignIn()) return;
 
     const postRef = doc(db, 'community_posts', postId);
     const post = posts.find(p => p.id === postId);
-    
-    if (post?.likes?.includes(user.uid)) {
+
+    if (post?.likes?.includes(user?.uid)) {
       await updateDoc(postRef, {
         likes: arrayRemove(user.uid)
       });
@@ -262,14 +283,15 @@ function Community() {
 
   // Add reply
   const handleReply = async (postId) => {
-    if (!replyText.trim() || !user) return;
+    if (!replyText.trim()) return;
+    if (!requireSignIn()) return;
 
     const postRef = doc(db, 'community_posts', postId);
-    
+
     // Use profile data if available
-    const authorName = userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'Anonymous';
-    const authorPhoto = userProfile?.photoURL || user.photoURL || null;
-    
+    const authorName = userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'Traveler';
+    const authorPhoto = userProfile?.photoURL || user?.photoURL || null;
+
     const newReply = {
       id: Date.now().toString(),
       content: replyText.trim(),
@@ -295,7 +317,7 @@ function Community() {
   // Delete post
   const handleDeletePost = async (postId, authorId) => {
     if (!user || user.uid !== authorId) return;
-    
+
     if (window.confirm('Are you sure you want to delete this post?')) {
       try {
         const post = posts.find(item => item.id === postId);
@@ -310,7 +332,7 @@ function Community() {
 
   // Handle poll vote
   const handlePollVote = async (postId, optionIdx) => {
-    if (!user) return;
+    if (!requireSignIn()) return;
     const post = posts.find(p => p.id === postId);
     if (!post || !post.poll) return;
     // Remove user from all options, add to selected
@@ -329,7 +351,7 @@ function Community() {
   // Format date as relative time
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Just now';
-    
+
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     const now = new Date();
     const diffMs = now - date;
@@ -360,52 +382,44 @@ function Community() {
     setExpandedPosts(prev => ({ ...prev, [postId]: !prev[postId] }));
   };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen trip-page-background community-background">
-        <Navbar />
-        <div className="pt-20 sm:pt-24 pb-24 px-4">
-          <div className="max-w-md mx-auto text-center">
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-xl p-8">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
-                </svg>
-              </div>
-              <h2 className="text-xl font-semibold text-zinc-900 mb-2">Join the Community</h2>
-              <p className="text-zinc-500 text-sm mb-6">Sign in to share your travel experiences and connect with fellow travelers.</p>
-              <button
-                onClick={() => navigate('/')}
-                className="px-6 py-3 bg-black hover:bg-gray-800 text-white rounded-xl text-sm font-medium transition-all shadow-lg"
-              >
-                Sign In
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+
+  if (!authReady) return <div className="min-h-screen trip-page-background community-background"><Navbar/><div className="flex min-h-screen items-center justify-center"><Spinner/></div></div>;
+  if (!user) return <div className="relative min-h-screen trip-page-background community-background">
+    <Navbar/>
+    <div aria-hidden="true" className="pointer-events-none mx-auto max-w-2xl space-y-5 px-4 pb-28 pt-28 opacity-40 blur-sm">
+      {[0,1,2].map(index => <div key={index} className="rounded-2xl border border-slate-200 bg-white p-6"><div className="mb-5 flex items-center gap-3"><div className="h-10 w-10 rounded-full bg-slate-200"/><div className="h-3 w-32 rounded bg-slate-200"/></div><div className="h-3 w-full rounded bg-slate-100"/><div className="mt-3 h-3 w-3/4 rounded bg-slate-100"/><div className="mt-6 h-20 rounded-xl bg-slate-100"/></div>)}
+    </div>
+    <div className="community-access-overlay absolute inset-x-0 bottom-0 top-14 flex items-start justify-center bg-white/40 px-5 pb-28 pt-[min(20vh,160px)] backdrop-blur-md sm:top-16">
+      <section aria-labelledby="community-signin-title" className="community-access-panel w-full max-w-sm rounded-3xl border border-slate-200 bg-white/90 p-7 text-center shadow-xl">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><LockKeyhole size={26} aria-hidden="true"/></div>
+        <h1 id="community-signin-title" className="mt-5 text-2xl font-semibold text-slate-900">Your travel community awaits</h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">Sign in to explore stories, view posts, and publish your own adventures.</p>
+        <button type="button" onClick={requireSignIn} className="mt-6 min-h-11 w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">Sign in to explore</button>
+        <p className="mt-3 text-xs leading-5 text-slate-500">Use email or Google to join.</p>
+      </section>
+    </div>
+  </div>;
 
   return (
     <div className="min-h-screen trip-page-background community-background">
       <Navbar />
       <div className="pt-20 sm:pt-24 pb-24 px-4">
         <div className="max-w-2xl mx-auto">
-          
+
           {/* Header */}
           <div className="text-center mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 mb-1">Travel Community</h1>
             <p className="text-zinc-500 text-sm">Share your adventures & connect with travelers</p>
           </div>
 
+
           {/* Create Post Card */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-zinc-200/60 shadow-lg p-4 mb-6">
             <div className="flex gap-3">
-              {(userProfile?.photoURL || user.photoURL) ? (
-                <img 
-                  src={userProfile?.photoURL || user.photoURL} 
-                  alt="" 
+              {(userProfile?.photoURL || user?.photoURL) ? (
+                <img
+                  src={userProfile?.photoURL || user?.photoURL}
+                  alt=""
                   className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-zinc-100"
                   onError={(e) => {
                     e.target.onerror = null;
@@ -414,11 +428,11 @@ function Community() {
                   }}
                 />
               ) : null}
-              <div 
+              <div
                 className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 items-center justify-center text-white font-medium text-sm flex-shrink-0"
-                style={{ display: (userProfile?.photoURL || user.photoURL) ? 'none' : 'flex' }}
+                style={{ display: (userProfile?.photoURL || user?.photoURL) ? 'none' : 'flex' }}
               >
-                {getInitials(userProfile?.displayName || user.displayName || user.email)}
+                {getInitials(userProfile?.displayName || user?.displayName || user?.email || 'Traveler')}
               </div>
               <div className="min-w-0 flex-1">
                 <textarea
@@ -487,7 +501,7 @@ function Community() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
                     )}
-                    {posting ? postStage : 'Post'}
+                    {posting ? postStage : user ? 'Post' : 'Sign in to post'}
                   </button>
                 </div>
               </div>
@@ -547,7 +561,7 @@ function Community() {
                           <p className="text-xs text-zinc-400">{formatDate(post.createdAt)}</p>
                         </div>
                       </div>
-                      {user.uid === post.authorId && (
+                      {user?.uid === post.authorId && (
                         <button
                           onClick={() => handleDeletePost(post.id, post.authorId)}
                           className="p-2 hover:bg-zinc-100 rounded-lg transition-colors text-zinc-400 hover:text-red-500"
@@ -574,7 +588,7 @@ function Community() {
                         <div className="font-semibold text-xs text-zinc-600 mb-1">Poll:</div>
                         <ul className="space-y-1">
                           {post.poll.map((opt, idx) => {
-                            const voted = Array.isArray(opt.votes) && opt.votes.includes(user.uid);
+                            const voted = Array.isArray(opt.votes) && opt.votes.includes(user?.uid);
                             return (
                               <li key={idx} className="flex items-center gap-2">
                                 <button
@@ -598,17 +612,17 @@ function Community() {
                     <button
                       onClick={() => handleLike(post.id)}
                       className={`flex items-center gap-1.5 text-sm transition-colors ${
-                        post.likes?.includes(user.uid) 
-                          ? 'text-red-500' 
+                        post.likes?.includes(user?.uid)
+                          ? 'text-red-500'
                           : 'text-zinc-500 hover:text-red-500'
                       }`}
                     >
-                      <svg className="w-5 h-5" fill={post.likes?.includes(user.uid) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill={post.likes?.includes(user?.uid) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                       </svg>
                       <span>{post.likes?.length || 0}</span>
                     </button>
-                    
+
                     <button
                       onClick={() => {
                         setReplyingTo(replyingTo === post.id ? null : post.id);

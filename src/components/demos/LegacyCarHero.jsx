@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import Lottie from 'react-lottie-player/dist/LottiePlayerLight';
 import { Pause, Play } from 'lucide-react';
 
 export default function LegacyCarHero() {
   const container = useRef(null);
+  const canvasHost = useRef(null);
+  const animation = useRef(null);
+  const [tabVisible, setTabVisible] = useState(() => !document.hidden);
   const [data, setData] = useState(null);
   const [failed, setFailed] = useState(false);
   const [visible, setVisible] = useState(true);
@@ -17,8 +19,32 @@ export default function LegacyCarHero() {
     if (container.current) observer.observe(container.current);
     return () => { controller.abort(); observer.disconnect(); };
   }, []);
+  useEffect(() => {
+    const update = () => setTabVisible(!document.hidden);
+    document.addEventListener('visibilitychange', update);
+    return () => document.removeEventListener('visibilitychange', update);
+  }, []);
+  useEffect(() => {
+    if (!data) return;
+    let disposed = false;
+    import('lottie-web/build/player/lottie_light_canvas').then(({ default: lottie }) => {
+      if (disposed || !canvasHost.current) return;
+      const player = lottie.loadAnimation({ container: canvasHost.current, renderer: 'canvas', loop: true, autoplay: false, animationData: data, rendererSettings: { preserveAspectRatio: 'xMidYMid slice', dpr: Math.min(window.devicePixelRatio || 1, 1.5) } });
+      player.setSubframe(false);
+      animation.current = player;
+      const resize = new ResizeObserver(() => player.resize());
+      resize.observe(canvasHost.current);
+      player.addEventListener('destroy', () => resize.disconnect());
+      if (!paused && visible && !document.hidden) player.play();
+    }).catch(() => { if (!disposed) setFailed(true); });
+    return () => { disposed = true; animation.current?.destroy(); animation.current = null; };
+  }, [data]);
+  useEffect(() => {
+    if (paused || !visible || !tabVisible) animation.current?.pause();
+    else animation.current?.play();
+  }, [paused, visible, tabVisible]);
   return <div ref={container} className="legacy-car-hero absolute inset-0">
-    <div aria-hidden="true" className="hero-car-animation pointer-events-none absolute inset-0">{data && <Lottie animationData={data} play={!paused && visible} loop rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}/>}</div>
+    <div ref={canvasHost} aria-hidden="true" className="hero-car-animation pointer-events-none absolute inset-0" />
     <div aria-hidden="true" className="hero-sky-shade pointer-events-none absolute inset-0" />
     {!failed && <button type="button" disabled={!data} onClick={() => setPaused(value => !value)} className="absolute right-4 top-3 z-20 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-600">{paused ? <Play size={12}/> : <Pause size={12}/>} {paused ? 'Play motion' : 'Pause motion'}</button>}
   </div>;

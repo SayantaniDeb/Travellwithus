@@ -1,3 +1,8 @@
+import ManualStay from './ManualStay';
+import ManualJourneys from './ManualJourneys';
+import { manualPlan } from '../utils/manualPlan';
+import { aiFetch } from '../utils/aiFetch';
+import { saveGuestTrip } from '../utils/guestTrips';
 import MobileAccordion from './ui/mobile-accordion';
 import { parsePlanningJson } from '../utils/parsePlanningJson';
 import { API_BASE } from '../utils/apiBase';
@@ -40,7 +45,7 @@ const API_URL = API_BASE;
 
 // Helper function to call AI via backend proxy
 const callAI = async (model, prompt, maxTokens = 8000, options = {}) => {
-  const response = await fetch(`${API_URL}/api/completions`, {
+  const response = await aiFetch(`${API_URL}/api/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -219,7 +224,7 @@ export default function TripPlanner() {
       setError('Enter a real destination, including its city and country.');
       return;
     }
-    if ((includeTravel || sourceLocation.trim()) && !cleanLocationName(sourceLocation)) {
+    if ((user && includeTravel || sourceLocation.trim()) && !cleanLocationName(sourceLocation)) {
       setError('Enter a real starting city and country before generating travel directions.');
       return;
     }
@@ -254,6 +259,10 @@ export default function TripPlanner() {
       return;
     }
 
+    if (!user) {
+      setPlan(manualPlan({destination,source:sourceLocation,startDate,endDate,currency,budgetAmount}));
+      setIncludeHotels(false);setIncludeTravel(false);setStep('calendar');setError(null);return;
+    }
     if (!refreshing) setStep('loading');
     setLoading(true);
     setError(null);
@@ -578,9 +587,17 @@ Offer different real activities with morning, afternoon and evening objects. Eac
     if(loading||refreshingDay!==null||refreshingPeriod!==null||refreshingTravel||saving){setError('Wait for the plan and estimates to finish before saving.');return null;}
     if(!plan?.days?.length){setError('Generate a plan before saving.');return null;}
     const missing=plan.days.filter(day=>!day.travelReservation&&!day.isDraftDay&&!day.estimateCleared&&parseEstimatedCost(day.estimatedCost)===null);
-    if(missing.length){setError('Daily estimates are missing. Refresh those days before saving so their costs are stored with the trip.');return null;}
+    if(missing.length && !plan.manual){setError('Daily estimates are missing. Refresh those days before saving so their costs are stored with the trip.');return null;}
     if (!user) {
-      return null;
+      setSaving(true);
+      try {
+        const saved = await saveGuestTrip({ ...plan, source: sourceLocation, currency, budgetAmount: Number(budgetAmount) || 0, startDate, endDate, includeHotels, includeTravel });
+        setTripSaved(true);
+        sessionStorage.removeItem(cacheKey);
+        navigate(`/saved-trips?trip=${encodeURIComponent(saved.id)}`);
+        return { id: saved.id, deviceOnly: true };
+      } catch (err) { setError(err.message); return null; }
+      finally { setSaving(false); }
     }
 
     setSaving(true);
@@ -633,7 +650,7 @@ Offer different real activities with morning, afternoon and evening objects. Eac
               budgetAmount={budgetAmount} setBudgetAmount={setBudgetAmount} currency={currency} setCurrency={setCurrency}
               currencies={CURRENCIES} includeHotels={includeHotels} setIncludeHotels={setIncludeHotels}
               includeTravel={includeTravel} setIncludeTravel={setIncludeTravel} loading={loading} error={error}
-              onGenerate={generatePlan}
+              manual={!user} onGenerate={generatePlan}
             />
           </div>
         </div>
@@ -680,26 +697,18 @@ Offer different real activities with morning, afternoon and evening objects. Eac
               budget={budgetAmount} currency={currency} symbol={CURRENCIES[currency]?.symbol || '₹'}>
                   <button
                     onClick={() => {
-                      if (!user) {
-                        setShowSignInPopup(true);
-                        return;
-                      }
                       saveTrip();
                     }}
                     disabled={saving || loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel}
                     className="flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {saving ? 'Saving...' : 'Save Trip'}
+                    {saving ? 'Saving...' : user ? 'Save Trip' : 'Save on this device'}
                   </button>
                   <button
                     onClick={async () => {
-                      if (!user) {
-                        setShowSignInPopup(true);
-                        return;
-                      }
-
                       // Save trip first
                       const tripRef = await saveTrip();
+                      if (tripRef?.deviceOnly) return;
                       if (tripRef) {
                         // Then navigate to budget tracking
                         navigate('/budget/' + tripRef.id, {
@@ -737,17 +746,18 @@ Offer different real activities with morning, afternoon and evening objects. Eac
             <div className="mb-7"><BudgetTrackerPreview trip={{ ...plan, includeTravel, currency, budgetAmount, startDate, endDate }} userId={user?.uid} symbol={CURRENCIES[currency]?.symbol || '₹'} onDraftChange={patch => { setPlan(current => ({ ...current, ...patch })); setTripSaved(false); }} /></div>
             </MobileAccordion>
 
-            <MobileAccordion title="Your journeys" summary="Routes, transport and fares">{!plan.travelInfo && <div className="journey-empty-state rounded-xl border border-slate-200 bg-white p-4"><p className="mb-3 text-sm text-slate-500">No travel path added yet. Add directions now; costs can be entered later.</p><button type="button" onClick={() => setJourneyEditorOpen(value => !value)} aria-expanded={journeyEditorOpen} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{journeyEditorOpen ? 'Hide travel path form' : 'Add travel path'}</button>{journeyEditorOpen && <JourneyDirections plan={plan} source={sourceLocation} onSourceChange={setSourceLocation} onGenerate={refreshTravel} busy={refreshingTravel} disabled={loading || refreshingDay !== null || refreshingPeriod !== null} message={travelMessage}/>}</div>}{plan.travelInfo && <JourneyTickets showAddTravelCost onSaveCost={saveJourneyCost} plan={plan} source={sourceLocation} onSourceChange={setSourceLocation} onGenerate={refreshTravel} busy={refreshingTravel} disabled={loading || refreshingDay !== null || refreshingPeriod !== null} message={travelMessage} />}</MobileAccordion>
+            {!user && <MobileAccordion title="Your stay" summary="Accommodation details and notes"><ManualStay plan={{...plan,startDate,endDate,currency}} onChange={changes=>{setPlan(current=>({...current,...changes}));setTripSaved(false);}}/></MobileAccordion>}
+            <MobileAccordion title="Your journeys" summary="Routes, transport and fares">{!user ? <ManualJourneys plan={{...plan,source:sourceLocation,startDate,endDate,currency}} onChange={changes=>{setPlan(current=>({...current,...changes}));setTripSaved(false);}}/> : !plan.travelInfo && <div className="journey-empty-state rounded-xl border border-slate-200 bg-white p-4"><p className="mb-3 text-sm text-slate-500">No travel path added yet. Add directions now; costs can be entered later.</p><button type="button" onClick={() => setJourneyEditorOpen(value => !value)} aria-expanded={journeyEditorOpen} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{journeyEditorOpen ? 'Hide travel path form' : 'Add travel path'}</button>{journeyEditorOpen && <JourneyDirections plan={plan} source={sourceLocation} onSourceChange={setSourceLocation} onGenerate={refreshTravel} busy={refreshingTravel} disabled={loading || refreshingDay !== null || refreshingPeriod !== null} message={travelMessage}/>}</div>}{user && plan.travelInfo && <JourneyTickets showAddTravelCost onSaveCost={saveJourneyCost} plan={plan} source={sourceLocation} onSourceChange={setSourceLocation} onGenerate={refreshTravel} busy={refreshingTravel} disabled={loading || refreshingDay !== null || refreshingPeriod !== null} message={travelMessage} />}</MobileAccordion>
 
             <MobileAccordion title="Day-by-day itinerary" summary={`${plan.days?.length || 0} cards · Activities and travel days`}>
             <div className="mb-4 mt-7 flex flex-wrap items-center justify-between gap-3">
               <div><h2 className="text-lg font-semibold text-slate-950">Day by day</h2><p className="mt-1 text-xs text-slate-500">Open a day to see activities, or refresh it for a different plan.</p></div>
-              <button type="button" onClick={() => generatePlan({ refresh: true })} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{loading ? 'Refreshing…' : 'Refresh entire itinerary'}</button>
+              {user && <button type="button" onClick={() => generatePlan({ refresh: true })} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{loading ? 'Refreshing…' : 'Refresh entire itinerary'}</button>}
             </div>
             {/* Days Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {plan.days?.map((day, dayIndex) => (
-                day.isDraftDay ? <BlankDayCard label={itineraryDayLabel(plan.days,day)} key={day.date} day={day} busy={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} onGenerate={() => refreshDay(dayIndex)} onSave={value => saveExtraDay(dayIndex, value)} /> : 
+                (day.isDraftDay || !user && plan.manual) ? <BlankDayCard manual={!user} label={itineraryDayLabel(plan.days,day)} key={day.date} day={day} busy={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} onGenerate={() => refreshDay(dayIndex)} onSave={value => saveExtraDay(dayIndex, value)} /> :
                 <div
                   key={day.day}
                   onClick={() => { setSelectedDay(day); setStep('dayDetail'); }}
@@ -757,7 +767,7 @@ Offer different real activities with morning, afternoon and evening objects. Eac
                     <span className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-medium px-3 py-1 rounded-lg shadow-sm">{itineraryDayLabel(plan.days,day)}</span>
                     <div className="flex items-center gap-2"><span className="text-xs text-zinc-500">{formatDate(day.date)}</span><DayRefreshButton day={day} busy={refreshingDay === dayIndex} disabled={loading || refreshingDay !== null || refreshingPeriod !== null || refreshingTravel} onClick={() => refreshDay(dayIndex)} /></div>
                   </div>
-                  
+
                   {day.travelReservation && <p className="mb-1 text-[11px] sm:mb-2 sm:text-xs font-semibold text-blue-700">{day.travelReservation.journeyId === 'onward' ? 'Onward journey' : 'Return journey'} · transport fixed</p>}
                   <h3 className="text-sm sm:text-base font-medium text-zinc-900 mb-1 group-hover:text-zinc-700 transition-colors">{day.title}</h3>
                   <p className="text-xs sm:text-sm text-zinc-500 mb-2 sm:mb-3 line-clamp-2">{day.summary}</p>

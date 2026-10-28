@@ -10,7 +10,7 @@ function fallbackAvatar(uid) {
 }
 
 export function ProfileProvider({ children }) {
-  const [identity, setIdentity] = useState(() => ({ user: auth?.currentUser || null, profile: null }));
+  const [identity, setIdentity] = useState(() => ({ user: auth?.currentUser?.isAnonymous ? null : auth?.currentUser || null, profile: null }));
   useEffect(() => {
     let stopProfile;
     let activeUid;

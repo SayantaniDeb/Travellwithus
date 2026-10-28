@@ -1,6 +1,6 @@
 // Firebase configuration and initialization
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, onAuthStateChanged as observeAuthState, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
+import { initializeAuth, browserLocalPersistence, browserSessionPersistence, indexedDBLocalPersistence, onAuthStateChanged as observeAuthState, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -18,7 +18,7 @@ const app = firebaseConfig.apiKey
   : null;
 
 // Initialize Firebase Authentication and get a reference to the service
-export const auth = app ? getAuth(app) : null;
+export const auth = app ? initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence] }) : null;
 
 // Keep public pages usable when local Firebase credentials are absent.
 export function onAuthStateChanged(authInstance, callback, ...options) {
@@ -26,7 +26,7 @@ export function onAuthStateChanged(authInstance, callback, ...options) {
     callback(null);
     return () => {};
   }
-  return observeAuthState(authInstance, callback, ...options);
+  return observeAuthState(authInstance, user => callback(user?.isAnonymous ? null : user), ...options);
 }
 
 // Google Auth Provider

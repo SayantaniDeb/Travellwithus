@@ -1,3 +1,6 @@
+import { aiFetch } from '../utils/aiFetch';
+import GuestSavedTrips from './GuestSavedTrips';
+import { useProfileIdentity } from '../context/ProfileContext';
 import { addDays, daysBetween } from '../utils/tripDates';
 import MobileAccordion from './ui/mobile-accordion';
 import { LoadingOverlay } from './NavigationLoading';
@@ -40,7 +43,7 @@ const API_URL = API_BASE;
 
 // Helper function to call AI via backend proxy
 const callAI = async (model, prompt, maxTokens = 8000) => {
-  const response = await fetch(`${API_URL}/api/completions`, {
+  const response = await aiFetch(`${API_URL}/api/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -93,6 +96,12 @@ function BudgetComparison({ trip, budget }) {
 }
 
 export default function SavedTrips() {
+  const { user } = useProfileIdentity();
+  const [params] = useSearchParams();
+  return !user || params.get("device") === "1" ? <GuestSavedTrips/> : <AccountSavedTrips/>;
+}
+
+function AccountSavedTrips() {
   const returnLocation=useLocation();
   const [trips, setTrips] = useState([]);
   const [journeyEditorOpen, setJourneyEditorOpen] = useState(false);
@@ -962,7 +971,7 @@ Return ONLY valid JSON (keep same structure as original):
 
 
           <MobileAccordion title="Your stay" summary="View or change your chosen hotel">
-          <ChosenStay trip={selectedTrip} userId={user?.uid} tripId={selectedTrip.id} onBrowse={() => navigate('/hotels?saved=1', { state: { tripData: selectedTrip, fromPage: 'saved-trips' } })} />
+          <ChosenStay trip={selectedTrip} userId={user?.uid} tripId={selectedTrip.id} onBrowse={() => navigate('/hotels', { state: { tripData: selectedTrip, fromPage: 'saved-trips' } })} />
           </MobileAccordion>
 
           <MobileAccordion title="Your journeys" summary="Routes, transport and fares">{!selectedTrip.travelInfo && <div className="journey-empty-state rounded-xl border border-slate-200 bg-white p-4"><p className="mb-3 text-sm text-slate-500">No travel path added yet. Add directions now; costs can be entered later.</p><button type="button" onClick={() => setJourneyEditorOpen(value => !value)} aria-expanded={journeyEditorOpen} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{journeyEditorOpen ? 'Hide travel path form' : 'Add travel path'}</button>{journeyEditorOpen && <JourneyDirections plan={selectedTrip} source={travelSource || selectedTrip.source || ''} onSourceChange={setTravelSource} onGenerate={addSavedDirections} busy={refreshTarget === 'travel'} disabled={regenerating || Boolean(refreshTarget)} message={travelMessage}/>}</div>}{selectedTrip.travelInfo && <JourneyTickets showAddTravelCost onRemove={removeSavedJourney} onSaveCost={saveJourneyCost} plan={selectedTrip} source={travelSource || selectedTrip.source || selectedTrip.travelInfo?.from || ''} onSourceChange={setTravelSource} onGenerate={addSavedDirections} busy={refreshTarget === 'travel'} disabled={regenerating || Boolean(refreshTarget)} message={travelMessage} />}</MobileAccordion>
