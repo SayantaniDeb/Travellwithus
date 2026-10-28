@@ -1,3 +1,4 @@
+import { LoadingOverlay } from './NavigationLoading';
 import { API_BASE } from '../utils/apiBase';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -496,7 +497,7 @@ function Community() {
           {/* Posts Feed */}
           {loading ? (
             <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-3 border-zinc-200 border-t-blue-600 rounded-full animate-spin"></div>
+              <LoadingOverlay label="Loading community…"/>
             </div>
           ) : posts.length === 0 ? (
             <div className="text-center py-12">

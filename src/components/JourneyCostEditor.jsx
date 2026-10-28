@@ -1,9 +1,10 @@
 import { fareProviders, recordedProvider } from '../utils/fareProviders';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { legDate, savedLegCost, vehicleCost } from '../utils/journeyCost';
-export default function JourneyCostEditor({ plan, direction, info, onSave, disabled }) {
+export default function JourneyCostEditor({ plan, direction, info, onSave, disabled, openRequest = 0 }) {
   const existing=info?.costEstimate;
   const [open,setOpen]=useState(false),[error,setError]=useState('');
+  useEffect(() => { if (openRequest) setOpen(true); }, [openRequest]);
   const [inputs,setInputs]=useState(existing?.inputs || {distanceKm:info?.distanceKm || '',energyType:'petrol',efficiency:'',unitPrice:'',chargingLossPercent:'0',extras:'0'});
   const [amount,setAmount]=useState(existing?.amount || ''),[travelers,setTravelers]=useState(existing?.travelers || 1);
   const road=/car|motorbike|motorcycle/i.test(info?.recommendedMode || ''), flight=/flight|air/i.test(info?.recommendedMode || ''), bus=/bus/i.test(info?.recommendedMode || '');

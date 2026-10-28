@@ -668,3 +668,43 @@ html.dark .feature-section-nav .feature-nav-number-active { background: #93c5fd;
     font-size: 9px !important;
   }
 }
+
+html.dark .meal-card {
+  background-image: none !important;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+}
+html.dark .meal-card-dinner { background-color: #2b1e2b !important; border-color: #684154 !important; }
+html.dark .meal-card-lunch { background-color: #152d29 !important; border-color: #315c50 !important; }
+html.dark .meal-card .flex-1 p { color: #e2e8f0 !important; }
+html.dark .meal-card-dinner .flex-1 p:first-child { color: #fda4af !important; }
+html.dark .meal-card-lunch .flex-1 p:first-child { color: #6ee7b7 !important; }
+
+@media (max-width: 767px) {
+  .mobile-trip-accordion { margin-bottom: 12px; border: 1px solid #dbe3ef; border-radius: 14px; background: #fff; }
+  .mobile-trip-accordion-content { padding: 0 16px 16px; min-width: 0; overflow-wrap: anywhere; }
+  .mobile-trip-accordion-content > :first-child { margin-top: 0; }
+  .mobile-trip-accordion-content > :last-child { margin-bottom: 0; }
+  html.dark .mobile-trip-accordion { background: #131f31; border-color: #2b3e57; }
+}
+
+/* An accordion supplies the mobile card shell; its content needs only one gutter. */
+@media (max-width: 767px) {
+  .mobile-trip-accordion > h2 { margin: 0; }
+  .mobile-trip-accordion-content :is(.journey-tickets, .chosen-stay-card, .budget-preview-card, .packing-suggestions-card, .journey-empty-state) {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  .mobile-trip-accordion-content > .journey-tickets > :is(h2, h2 + p),
+  .mobile-trip-accordion-content > .chosen-stay-card > h2,
+  .mobile-trip-accordion-content > .packing-suggestions-card > h4 { display: none; }
+  .mobile-trip-accordion-content > .journey-tickets > .mt-3:first-of-type { margin-top: 0; }
+  .mobile-trip-accordion-content .journey-tickets > div > button { max-width: 100%; white-space: normal; }
+  .mobile-trip-accordion-content .journey-tickets > div > section,
+  .mobile-trip-accordion-content .journey-empty-state > section { margin-top: 16px; margin-bottom: 0; padding: 12px; border-radius: 12px; }
+  .mobile-trip-accordion-content .journey-tickets > p:last-child { line-height: 1.6; }
+}

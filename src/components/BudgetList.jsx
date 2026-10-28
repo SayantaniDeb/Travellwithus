@@ -1,3 +1,4 @@
+import { LoadingOverlay } from './NavigationLoading';
 import LoadingSpinner from './LoadingSpinner';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -68,7 +69,7 @@ export default function BudgetList() {
       <div className="min-h-screen trip-page-background budget-background">
         <Navbar />
         <div className="pt-20 flex items-center justify-center">
-          <LoadingSpinner label="Loading budgets…"/>
+          <LoadingOverlay label="Loading budgets…"/>
         </div>
       </div>
     );

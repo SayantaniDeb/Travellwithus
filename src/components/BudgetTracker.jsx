@@ -1,3 +1,4 @@
+import { LoadingOverlay } from './NavigationLoading';
 import LoadingSpinner from './LoadingSpinner';
 import BudgetTrackerPreview from './BudgetTrackerPreview';
 import { savedTripPath } from '../utils/tripNavigation';
@@ -103,7 +104,7 @@ export default function BudgetTracker() {
   if (loading) {
     return (
       <div className="min-h-screen trip-page-background budget-background flex items-center justify-center">
-        <LoadingSpinner label="Loading budget…"/>
+        <LoadingOverlay label="Loading budget…"/>
       </div>
     );
   }

@@ -1,3 +1,6 @@
+import { addDays, daysBetween } from '../utils/tripDates';
+import MobileAccordion from './ui/mobile-accordion';
+import { LoadingOverlay } from './NavigationLoading';
 import { API_BASE } from '../utils/apiBase';
 import LazyCard from './LazyCard';
 import LoadingSpinner from './LoadingSpinner';
@@ -314,10 +317,11 @@ export default function SavedTrips() {
       const destination = original.actualDestination || original.destination;
       const leg = await requestTravelInfo(callAI, direction === 'return' ? destination : source, direction === 'return' ? source : destination, original.currency || 'INR', mode);
       const info = applyJourneyLeg(original, leg, direction);
-      const result = attachTravelDirections(original, info, source);
+      const restored = {...original, removedJourneys:(original.removedJourneys || []).filter(item => item !== direction)};
+      const result = attachTravelDirections(restored, info, source);
       if (mode && !result.plan.travelSchedule) throw new Error(result.notice);
       await updateDoc(doc(db, 'users', user.uid, 'trips', original.id), {
-        travelInfo: info, source, includeTravel: true, days: result.plan.days,
+        removedJourneys: result.plan.removedJourneys || [], travelInfo: info, source, includeTravel: true, days: result.plan.days,
         travelSchedule: result.plan.travelSchedule || null, totalBudget: null, budgetWarning: null, updatedAt: new Date()
       });
       setSelectedTrip(result.plan);
@@ -355,9 +359,14 @@ export default function SavedTrips() {
     const currencySymbol = CURRENCIES[currency]?.symbol || '₹';
     const destination = selectedTrip.actualDestination || selectedTrip.destination;
     const source = selectedTrip.source || '';
-    const numDays = selectedTrip.days?.length || 3;
     const startDate = selectedTrip.startDate || selectedTrip.days?.[0]?.date;
-    const endDate = selectedTrip.endDate || selectedTrip.days?.[numDays - 1]?.date;
+    const endDate = selectedTrip.endDate || selectedTrip.days?.at(-1)?.date;
+    const numDays = daysBetween(startDate, endDate) + 1;
+    if (!Number.isInteger(numDays) || numDays < 1 || numDays > 30) {
+      setActionError('Set a valid trip date range of 1–30 days before refreshing.');
+      setRegenerating(false);
+      return;
+    }
 
     const prompt = `Regenerate a ${numDays}-day travel plan for "${destination}"${source ? ` from ${source}` : ''} with a NEW BUDGET of ${currencySymbol}${budgetNum}.
 
@@ -413,7 +422,7 @@ Return ONLY valid JSON (keep same structure as original):
   "days": [
     ${Array.from({length: numDays}, (_, i) => `{
       "day": ${i + 1},
-      "date": "${selectedTrip.days?.[i]?.date || ''}",
+      "date": "${addDays(startDate, i)}",
       "title": "Day title",
       "summary": "Day summary adjusted for budget",
       "estimatedCost": 0,
@@ -464,7 +473,8 @@ Return ONLY valid JSON (keep same structure as original):
         if(planData.days.some(day=>parseEstimatedCost(day.estimatedCost)===null))throw new Error('The replacement itinerary is missing daily cost estimates. Your saved plan has been kept. Please retry.');
         planData.startDate = startDate;
         planData.endDate = endDate;
-        planData.days = planData.days.map((day, index) => ({ ...day, day: selectedTrip.days[index].day, date: selectedTrip.days[index].date }));
+        planData.days = planData.days.map((day, index) => ({ ...day, day: index + 1, date: addDays(startDate, index) }));
+        planData.removedJourneys = selectedTrip.removedJourneys || [];
         planData.source = source;
         planData.includeTravel = selectedTrip.includeTravel !== false;
         if (planData.includeTravel) {
@@ -502,7 +512,7 @@ Return ONLY valid JSON (keep same structure as original):
     return (
       <div className="min-h-screen trip-page-background saved-trips-background">
         <Navbar />
-        <div className="flex min-h-screen items-center justify-center px-4 pt-16 pb-24"><LoadingSpinner label="Loading your trips…"/></div>
+        <div className="flex min-h-screen items-center justify-center px-4 pt-16 pb-24"><LoadingOverlay label="Loading your trips…"/></div>
       </div>
     );
   }
@@ -736,7 +746,7 @@ Return ONLY valid JSON (keep same structure as original):
               </div>
 
               {/* Lunch */}
-              <div className="bg-gradient-to-r from-emerald-50 to-emerald-100/50 border border-emerald-200/60 rounded-2xl p-4 flex items-center gap-3 shadow-lg shadow-emerald-100/50">
+              <div className="meal-card meal-card-lunch bg-gradient-to-r from-emerald-50 to-emerald-100/50 border border-emerald-200/60 rounded-2xl p-4 flex items-center gap-3 shadow-lg shadow-emerald-100/50">
                 <span className="w-10 h-10 flex items-center justify-center bg-gradient-to-br from-emerald-200 to-emerald-300 text-emerald-700 rounded-xl shadow-sm">🥗</span>
                 <div className="flex-1">
                   <span className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Lunch</span>
@@ -813,7 +823,7 @@ Return ONLY valid JSON (keep same structure as original):
               </div>
 
               {/* Dinner */}
-              <div className="bg-gradient-to-r from-rose-50 to-rose-100/50 border border-rose-200/60 rounded-2xl p-4 flex items-center gap-3 shadow-lg shadow-rose-100/50">
+              <div className="meal-card meal-card-dinner bg-gradient-to-r from-rose-50 to-rose-100/50 border border-rose-200/60 rounded-2xl p-4 flex items-center gap-3 shadow-lg shadow-rose-100/50">
                 <span className="w-10 h-10 flex items-center justify-center bg-gradient-to-br from-rose-200 to-rose-300 text-rose-700 rounded-xl shadow-sm">🍽</span>
                 <div className="flex-1">
                   <span className="text-xs text-rose-600 font-medium uppercase tracking-wide">Dinner</span>
@@ -902,7 +912,7 @@ Return ONLY valid JSON (keep same structure as original):
                 </div>
               )}
               {/* Cost */}
-              <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-5 text-center shadow-xl shadow-emerald-500/30">
+              <div className="meal-card meal-card-lunch bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-5 text-center shadow-xl shadow-emerald-500/30">
                 <span className="text-xs text-emerald-100 font-medium uppercase tracking-wide">Estimated Cost for {itineraryDayLabel(selectedTrip.days,day)}</span>
                 {editMode ? (
                   <input
@@ -949,19 +959,22 @@ Return ONLY valid JSON (keep same structure as original):
           {!selectedTrip.travelInfo && <button type="button" aria-expanded={journeyEditorOpen} onClick={() => setJourneyEditorOpen(value => !value)}>How to get there</button>}
             </TripHeader>
             <PlanBudgetWarning plan={selectedTrip} budget={selectedTrip.budgetAmount} symbol={CURRENCIES[selectedTrip.currency]?.symbol || '₹'} />
-            {!selectedTrip.travelInfo && journeyEditorOpen && (<JourneyDirections plan={selectedTrip} source={travelSource || selectedTrip.source || selectedTrip.travelInfo?.from || ''}
-            onSourceChange={setTravelSource} onGenerate={addSavedDirections} busy={refreshTarget === 'travel'}
-            disabled={regenerating || Boolean(refreshTarget)} message={travelMessage} />)}
 
+
+          <MobileAccordion title="Your stay" summary="View or change your chosen hotel">
           <ChosenStay trip={selectedTrip} userId={user?.uid} tripId={selectedTrip.id} onBrowse={() => navigate('/hotels?saved=1', { state: { tripData: selectedTrip, fromPage: 'saved-trips' } })} />
+          </MobileAccordion>
 
-          {selectedTrip.travelInfo && <JourneyTickets onRemove={removeSavedJourney} onSaveCost={saveJourneyCost} plan={selectedTrip} source={travelSource || selectedTrip.source || selectedTrip.travelInfo?.from || ''} onSourceChange={setTravelSource} onGenerate={addSavedDirections} busy={refreshTarget === 'travel'} disabled={regenerating || Boolean(refreshTarget)} message={travelMessage} />}
+          <MobileAccordion title="Your journeys" summary="Routes, transport and fares">{!selectedTrip.travelInfo && <div className="journey-empty-state rounded-xl border border-slate-200 bg-white p-4"><p className="mb-3 text-sm text-slate-500">No travel path added yet. Add directions now; costs can be entered later.</p><button type="button" onClick={() => setJourneyEditorOpen(value => !value)} aria-expanded={journeyEditorOpen} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{journeyEditorOpen ? 'Hide travel path form' : 'Add travel path'}</button>{journeyEditorOpen && <JourneyDirections plan={selectedTrip} source={travelSource || selectedTrip.source || ''} onSourceChange={setTravelSource} onGenerate={addSavedDirections} busy={refreshTarget === 'travel'} disabled={regenerating || Boolean(refreshTarget)} message={travelMessage}/>}</div>}{selectedTrip.travelInfo && <JourneyTickets showAddTravelCost onRemove={removeSavedJourney} onSaveCost={saveJourneyCost} plan={selectedTrip} source={travelSource || selectedTrip.source || selectedTrip.travelInfo?.from || ''} onSourceChange={setTravelSource} onGenerate={addSavedDirections} busy={refreshTarget === 'travel'} disabled={regenerating || Boolean(refreshTarget)} message={travelMessage} />}</MobileAccordion>
 
           {actionError && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-800">{actionError}</p>}
+          <MobileAccordion title="Budget tracker" summary={`Budget: ${CURRENCIES[selectedTrip.currency]?.symbol || '₹'}${Number(selectedTrip.budgetAmount || 0).toLocaleString()} · View estimates and added costs`}>
           <div className="mb-5 space-y-3">
             <BudgetTrackerPreview key={selectedTrip.id} trip={selectedTrip} userId={user?.uid} symbol={CURRENCIES[selectedTrip.currency]?.symbol || '₹'} />
             
           </div>
+          </MobileAccordion>
+          <MobileAccordion title="Day-by-day itinerary" summary={`${selectedTrip.days?.length || 0} cards · Activities and travel days`}>
           {/* Days Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {selectedTrip.days?.map((day, dayIndex) => (
@@ -1025,9 +1038,11 @@ Return ONLY valid JSON (keep same structure as original):
 
               <button type="button" disabled={regenerating || Boolean(refreshTarget)} onClick={addExtraDay} className="flex min-h-44 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/50 p-5 text-blue-700 hover:bg-blue-50 disabled:opacity-50"><span aria-hidden="true" className="text-3xl">+</span><span className="font-semibold">Add day</span><span className="text-xs text-slate-500">Extends the trip by one day; a reserved return shifts later.</span></button>          </div>
 
+          </MobileAccordion>
           {/* Packing List */}
           {selectedTrip.packingList && selectedTrip.packingList.length > 0 && (
-            <div className="mt-6 bg-white/80 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-5 shadow-lg shadow-zinc-200/30">
+            <MobileAccordion title="Packing suggestions" summary={`${selectedTrip.packingList?.length || 0} essentials for this trip`}>
+            <div className="packing-suggestions-card mt-6 bg-white/80 backdrop-blur-sm border border-zinc-200/60 rounded-2xl p-5 shadow-lg shadow-zinc-200/30">
               <h4 className="font-medium text-zinc-900 mb-3 flex items-center gap-2">
                 <svg className="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -1040,6 +1055,7 @@ Return ONLY valid JSON (keep same structure as original):
                 ))}
               </div>
             </div>
+            </MobileAccordion>
           )}
         </div>
       </div>

@@ -54,3 +54,17 @@ export async function linkStayToTrip(userId, hotel, trip, choose = true) {
     transaction.update(ref, { hotelDetails: saved.map(item => item.id === hotel.id ? linked : item), chosenStays: choices });
   });
 }
+
+// Save and choose atomically so search results and the shortlist share one state.
+export async function saveAndChooseStay(userId, hotel) {
+  const ref = doc(db, 'user_shortlists', userId);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.data() || {};
+    const saved = data.hotelDetails || [];
+    const details = saved.some(item => item.id === hotel.id) ? saved : [...saved, hotel];
+    if (!hotel.tripId) throw new Error('Select a saved trip before choosing a stay.');
+    const chosenStays = { ...(data.chosenStays || {}), [hotel.tripId]: hotel };
+    transaction.set(ref, { hotels: details.map(item => item.id), hotelDetails: details, chosenStays }, { merge: true });
+  });
+}

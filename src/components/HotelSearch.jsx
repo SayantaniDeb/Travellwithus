@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Shortlist from './Shortlist';
-import { toggleSavedStay } from '../utils/savedStays';
+import { toggleSavedStay, saveAndChooseStay, changeChosenStay } from '../utils/savedStays';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from '../Firebase';
 import DestinationAutocomplete from './DestinationAutocomplete';
@@ -636,6 +636,11 @@ export default function HotelSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   useEffect(() => { setError(null); }, [location, checkIn, checkOut, budget, currency]);
+  const [choosingStay, setChoosingStay] = useState(null);
+  const [chosenStays, setChosenStays] = useState({});
+  const [stayMessage, setStayMessage] = useState('');
+  const [stayError, setStayError] = useState(null);
+  const [assigningHotel, setAssigningHotel] = useState(null);
   const [shortlistedHotels, setShortlistedHotels] = useState(new Set());
   const navigate = useNavigate();
   const locationState = useLocation();
@@ -678,8 +683,8 @@ export default function HotelSearch() {
   useEffect(() => {
     let stop = () => {};
     const authStop = onAuthStateChanged(auth, user => {
-      stop(); setShortlistedHotels(new Set());
-      if (user) stop = onSnapshot(doc(db, 'user_shortlists', user.uid), snapshot => setShortlistedHotels(new Set(snapshot.data()?.hotels || [])), () => setError('Could not load saved hotels.'));
+      stop(); setShortlistedHotels(new Set()); setChosenStays({});
+      if (user) stop = onSnapshot(doc(db, 'user_shortlists', user.uid), snapshot => { setShortlistedHotels(new Set(snapshot.data()?.hotels || [])); setChosenStays(snapshot.data()?.chosenStays || {}); }, () => setError('Could not load saved hotels.'));
     });
     return () => { stop(); authStop(); };
   }, []);
@@ -702,6 +707,26 @@ export default function HotelSearch() {
     try { await toggleSavedStay(auth.currentUser.uid, hotelData); }
     catch (err) { setError(err.message); }
 
+  };
+
+  const chooseResultStay = async (hotel, targetTrip = linkedTrip) => {
+    if (!auth.currentUser) { navigate('/login'); return; }
+    if (!targetTrip?.id) { setAssigningHotel(hotelKey(hotel)); return; }
+    setChoosingStay(hotelKey(hotel)); setError(null); setStayError(null); setStayMessage('');
+    const hotelData = JSON.parse(JSON.stringify({ ...hotel, id: `${targetTrip.id}::${hotel.name}-${hotel.price}`, location,
+      tripId: targetTrip.id, tripName: targetTrip.actualDestination || targetTrip.destination,
+      tripDates: `${targetTrip.startDate || ''} – ${targetTrip.endDate || ''}`, dateAdded: new Date().toISOString() }));
+    try {
+      const selected = chosenStays[targetTrip.id]?.id === hotelData.id;
+      if (selected) await changeChosenStay(auth.currentUser.uid, hotelData, true);
+      else await saveAndChooseStay(auth.currentUser.uid, hotelData);
+      setChosenStays(current => { const next = {...current}; if (selected) delete next[targetTrip.id]; else next[targetTrip.id] = hotelData; return next; });
+      if (!linkedTrip?.id) { setLinkedTrip(targetTrip); sessionStorage.setItem('staysTripContext', JSON.stringify(targetTrip)); }
+      setAssigningHotel(null);
+      setStayMessage(selected ? '' : `${hotel.name} is your chosen stay. Also visible in Saved hotels. This is not a booking.`);
+    }
+    catch (err) { setStayError({id: hotelKey(hotel), message: err.code === 'permission-denied' ? 'Your stay could not be saved. Check your account permissions and try again.' : err.message}); }
+    finally { setChoosingStay(null); }
   };
 
   const currencies = {
@@ -1077,7 +1102,11 @@ Return ONLY valid JSON:
                     </div>
                     <p className="text-lg font-bold text-green-600 mb-2">{hotel.price}</p>
                     <p className="text-sm text-zinc-600 mb-3">Amenities: {hotel.amenities?.join(', ')}</p>
-                    <div className="flex gap-2">
+                    {stayError?.id === hotelId && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{stayError.message}</p>}
+                    {assigningHotel === hotelId && <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-3"><label className="block text-sm font-medium">Choose a trip for this stay<select aria-label={`Choose trip for ${hotel.name}`} defaultValue="" disabled={Boolean(choosingStay)} onChange={event => { const trip = availableTrips.find(item => item.id === event.target.value); if (trip) chooseResultStay(hotel, trip); }} className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-2"><option value="" disabled>Select a saved trip…</option>{availableTrips.map(trip => <option key={trip.id} value={trip.id}>{trip.actualDestination || trip.destination} · {trip.startDate}</option>)}</select></label>{!availableTrips.length && <p className="mt-2 text-sm">Save an itinerary first to choose a stay for it.</p>}</div>}
+                    {stayMessage && chosenStays[linkedTrip?.id]?.id === hotelId && <p role="status" className="mb-2 text-xs text-slate-500">{stayMessage}</p>}
+                    {chosenStays[linkedTrip?.id]?.id === hotelId && <p className="mb-3 text-sm font-semibold text-blue-700">Chosen stay · not booked</p>}
+                    <div className="flex flex-wrap gap-2">
                       {hotel.bookingLink && (
                         <a
                           href={safeExternalUrl(hotel.bookingLink) || undefined}
@@ -1089,10 +1118,11 @@ Return ONLY valid JSON:
                         </a>
                       )}
                       <button
-                        onClick={() => setShowSaved(true)}
-                        className="inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
+                        onClick={() => chooseResultStay(hotel)}
+                        disabled={Boolean(choosingStay)}
+                        className="inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60 transition-all"
                       >
-                        View Shortlist
+                        {choosingStay === hotelId ? 'Updating…' : chosenStays[linkedTrip?.id]?.id === hotelId ? 'Unchoose stay' : 'Choose stay'}
                       </button>
                     </div>
                   </div>

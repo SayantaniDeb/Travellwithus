@@ -1,7 +1,6 @@
 
+import NavigationLoading, { LoadingOverlay } from './NavigationLoading';
 import React, { Suspense } from 'react';
-import Navbar from './Navbar';
-import LoadingSpinner from './LoadingSpinner';
 import { Outlet, useLocation, ScrollRestoration } from 'react-router-dom';
 import MobileBottomNav from './MobileBottomNav';
 import LocationPermissionModal from './LocationPermissionModal';
@@ -15,7 +14,8 @@ export default function Layout() {
   return (
     <div className={showBottomNav ? 'pb-16 sm:pb-18 md:pb-20 lg:pb-0' : ''}>
       <ScrollRestoration />
-        <Suspense fallback={<div className="min-h-screen trip-page-background"><Navbar /><div className="flex min-h-screen items-center justify-center px-4 pt-16 pb-24"><LoadingSpinner label="Opening your next stop…" /></div></div>}>
+      <NavigationLoading />
+        <Suspense fallback={<LoadingOverlay/>}>
           <Outlet />
         </Suspense>
       <LocationPermissionModal />

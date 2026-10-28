@@ -43,9 +43,9 @@ export function reserveTravelDays(plan) {
   const end = plan.endDate || days[days.length - 1]?.date;
   const totalDays = daysBetween(start, end) + 1;
   if (!Number.isInteger(totalDays) || totalDays < 1 || days.length !== totalDays) throw new Error('The itinerary must have one card for each selected calendar date.');
-  const onwardCount = Math.ceil(hours / 24);
+  const onwardCount = plan.removedJourneys?.includes('onward') ? 0 : Math.ceil(hours / 24);
   const returnHours = Number(plan.travelInfo.returnJourney?.durationHours || plan.travelInfo.returnDurationHours) > 0 ? Number(plan.travelInfo.returnJourney?.durationHours || plan.travelInfo.returnDurationHours) : hours;
-  const returnCount = Math.ceil(returnHours / 24);
+  const returnCount = plan.removedJourneys?.includes('return') ? 0 : Math.ceil(returnHours / 24);
   if (onwardCount + returnCount > totalDays) throw new Error(`The estimated journeys need ${onwardCount + returnCount} travel days, but your dates contain ${totalDays}. Extend the dates or choose a faster transport option.`);
   const destination = plan.actualDestination || plan.destination;
   const mode = plan.travelInfo.recommendedMode || 'Transport';
@@ -71,7 +71,7 @@ export function reserveTravelDays(plan) {
     for (const [periodIndex, period] of periods.entries()) day[period] = unchanged ? existing[period] : { activity: /car|motorbike|motorcycle/i.test(journey.mode) ? roadSuggestions[periodIndex][0] : passengerTitles[periodIndex], description: /car|motorbike|motorcycle/i.test(journey.mode) ? roadSuggestions[periodIndex][1] : onboard[periodIndex], location: `${journey.from} → ${journey.to}`, duration: 'Within the reserved travel day', estimatedCost: 'Not estimated', onboardChoice: periodIndex };
     return day;
   });
-  return { ...plan, days: reserved, travelSchedule: { journeys, destinationDays: totalDays - onwardCount - returnCount, allocation: 'full-calendar-days', returnDurationAssumed: !(Number(plan.travelInfo.returnJourney?.durationHours || plan.travelInfo.returnDurationHours) > 0) }, totalBudget: null, budgetWarning: null };
+  return { ...plan, days: reserved, travelSchedule: { journeys: journeys.filter(journey => journey.dayCount > 0), destinationDays: totalDays - onwardCount - returnCount, allocation: 'full-calendar-days', returnDurationAssumed: !(Number(plan.travelInfo.returnJourney?.durationHours || plan.travelInfo.returnDurationHours) > 0) }, totalBudget: null, budgetWarning: null };
 }
 
 export function refreshOnboardDay(plan, index, period = null) {
